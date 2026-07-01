@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
+import { kstMidnightInstant } from "@/lib/kst";
 
 const schema = z.object({ intervalMinutes: z.number().int().min(1).max(120).default(10) });
 
@@ -22,8 +23,7 @@ export async function GET() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  const today = new Date();
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const start = kstMidnightInstant();
   const sessions = await prisma.camSession.findMany({
     where: { ownerId: user.id, startedAt: { gte: start } },
   });

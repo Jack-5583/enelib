@@ -2,17 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-
-function fmtTimeLabel(d: Date) {
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
+import { kstMidnightInstant, formatKstHm } from "@/lib/kst";
 
 export async function GET() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  const today = new Date();
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const start = kstMidnightInstant();
   const entries = await prisma.timelineEntry.findMany({
     where: { ownerId: user.id, capturedAt: { gte: start } },
     include: { memo: true },
@@ -22,8 +18,8 @@ export async function GET() {
   return NextResponse.json(
     entries.map((e) => ({
       id: e.id,
-      time: fmtTimeLabel(e.capturedAt),
-      end: e.endedAt ? fmtTimeLabel(e.endedAt) : fmtTimeLabel(e.capturedAt),
+      time: formatKstHm(e.capturedAt),
+      end: e.endedAt ? formatKstHm(e.endedAt) : formatKstHm(e.capturedAt),
       dur: e.durationLabel,
       subject: e.subject,
       title: e.todoTitle,

@@ -3,10 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { firstLinkedStudent } from "@/lib/access";
 import { computeDashboardStats } from "@/lib/stats";
-
-function fmtTimeLabel(d: Date) {
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
+import { kstMidnightInstant, formatKstHm } from "@/lib/kst";
 
 export async function GET() {
   const user = await getSessionUser();
@@ -16,8 +13,7 @@ export async function GET() {
   if (!student) return NextResponse.json({ student: null });
 
   const stats = await computeDashboardStats(student.id);
-  const today = new Date();
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const start = kstMidnightInstant();
   const entries = await prisma.timelineEntry.findMany({
     where: { ownerId: student.id, capturedAt: { gte: start } },
     include: { memo: true },
@@ -36,7 +32,7 @@ export async function GET() {
     ],
     timelineEntries: entries.map((e) => ({
       id: e.id,
-      time: fmtTimeLabel(e.capturedAt),
+      time: formatKstHm(e.capturedAt),
       subject: e.subject,
       title: e.todoTitle,
       photoUrl: e.memo?.dataUrl || e.photoUrl,

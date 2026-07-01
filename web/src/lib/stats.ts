@@ -1,18 +1,25 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { kstDateOnly, kstMidnightInstant, kstParts, addDaysToDateOnly, addDaysToInstant } from "@/lib/kst";
 
-function startOfDay(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-/** Monday-start week range containing `d`. */
+/** Monday-start KST week containing `d`, as two representations:
+ * - `dateOnly`: for filtering `@db.Date` columns (e.g. Todo.date)
+ * - `instant`: for filtering real timestamp columns (e.g. CamSession.startedAt)
+ */
 export function weekRange(d: Date) {
-  const day = d.getDay(); // 0=Sun..6=Sat
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-  const start = startOfDay(new Date(d.getFullYear(), d.getMonth(), d.getDate() + diffToMonday));
-  const end = new Date(start);
-  end.setDate(end.getDate() + 7);
-  return { start, end };
+  const { weekday } = kstParts(d); // 0=Sun..6=Sat
+  const diffToMonday = weekday === 0 ? -6 : 1 - weekday;
+
+  const startDateOnly = addDaysToDateOnly(kstDateOnly(d), diffToMonday);
+  const endDateOnly = addDaysToDateOnly(startDateOnly, 7);
+
+  const startInstant = addDaysToInstant(kstMidnightInstant(d), diffToMonday);
+  const endInstant = addDaysToInstant(startInstant, 7);
+
+  return {
+    dateOnly: { start: startDateOnly, end: endDateOnly },
+    instant: { start: startInstant, end: endInstant },
+  };
 }
 
 export function fmtHours(totalSeconds: number) {
@@ -23,18 +30,20 @@ export function fmtHours(totalSeconds: number) {
 }
 
 export async function computeDashboardStats(userId: string, now: Date = new Date()) {
-  const today = startOfDay(now);
-  const { start, end } = weekRange(now);
+  const today = kstDateOnly(now);
+  const { dateOnly: weekDates, instant: weekInstants } = weekRange(now);
 
   const [weekTodos, todayTodos, camSessionsAll, camSessionsWeek] = await Promise.all([
-    prisma.todo.findMany({ where: { ownerId: userId, date: { gte: start, lt: end } } }),
+    prisma.todo.findMany({ where: { ownerId: userId, date: { gte: weekDates.start, lt: weekDates.end } } }),
     prisma.todo.findMany({
       where: { ownerId: userId, date: today },
       include: { book: true },
       orderBy: { createdAt: "asc" },
     }),
     prisma.camSession.findMany({ where: { ownerId: userId } }),
-    prisma.camSession.findMany({ where: { ownerId: userId, startedAt: { gte: start, lt: end } } }),
+    prisma.camSession.findMany({
+      where: { ownerId: userId, startedAt: { gte: weekInstants.start, lt: weekInstants.end } },
+    }),
   ]);
 
   const weekTotal = weekTodos.length;
@@ -57,16 +66,17 @@ export async function computeDashboardStats(userId: string, now: Date = new Date
   const cumSeconds = camSessionsAll.reduce((s, c) => s + c.totalSeconds, 0);
   const weekSeconds = camSessionsWeek.reduce((s, c) => s + c.totalSeconds, 0);
 
-  // Streak: consecutive days (today backwards) with a done todo or cam session.
+  // Streak: consecutive KST days (today backwards) with a done todo or cam session.
   let streak = 0;
+  const todayInstant = kstMidnightInstant(now);
   for (let i = 0; i < 365; i++) {
-    const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setDate(dayEnd.getDate() + 1);
+    const dayDateOnly = addDaysToDateOnly(today, -i);
+    const dayInstantStart = addDaysToInstant(todayInstant, -i);
+    const dayInstantEnd = addDaysToInstant(dayInstantStart, 1);
     const [doneTodo, camThatDay] = await Promise.all([
-      prisma.todo.findFirst({ where: { ownerId: userId, done: true, date: dayStart } }),
+      prisma.todo.findFirst({ where: { ownerId: userId, done: true, date: dayDateOnly } }),
       prisma.camSession.findFirst({
-        where: { ownerId: userId, startedAt: { gte: dayStart, lt: dayEnd }, totalSeconds: { gt: 0 } },
+        where: { ownerId: userId, startedAt: { gte: dayInstantStart, lt: dayInstantEnd }, totalSeconds: { gt: 0 } },
       }),
     ]);
     if (doneTodo || camThatDay) streak += 1;

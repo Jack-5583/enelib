@@ -1,3 +1,5 @@
+import { kstEpochDay } from "@/lib/kst";
+
 export const QUOTES = [
   { text: "오늘 걷지 않으면 내일은 뛰어야 한다.", author: "토마스 홉스" },
   { text: "포기하지 않는 한 실패는 없다.", author: "토머스 에디슨" },
@@ -6,6 +8,6 @@ export const QUOTES = [
 ];
 
 export function todayQuote(date: Date = new Date()) {
-  const dayIndex = Math.floor(date.getTime() / 86400000) % QUOTES.length;
+  const dayIndex = kstEpochDay(date) % QUOTES.length;
   return QUOTES[dayIndex];
 }
