@@ -91,14 +91,18 @@ export async function checkOctomoVerification(
         reason: `OCTOMO 응답을 해석할 수 없습니다: ${bodyText.slice(0, 300)}`,
       };
     }
-    const verified = (data as { verified?: boolean } | null)?.verified;
-    if (typeof verified !== "boolean") {
+    // Docs say the field is `verified`, but the real API returns `exists`.
+    // Accept either so a future doc-matching change on OCTOMO's side doesn't
+    // break us again.
+    const parsed = data as { exists?: boolean; verified?: boolean } | null;
+    const found = parsed?.exists ?? parsed?.verified;
+    if (typeof found !== "boolean") {
       return {
         status: "unavailable",
         reason: `OCTOMO 응답 형식이 예상과 다릅니다: ${JSON.stringify(data).slice(0, 300)}`,
       };
     }
-    return { status: verified ? "verified" : "pending" };
+    return { status: found ? "verified" : "pending" };
   } catch (err) {
     const reason = `OCTOMO 서버에 연결할 수 없습니다: ${err instanceof Error ? err.message : String(err)}`;
     console.error("[octomo] verification check failed:", err);
