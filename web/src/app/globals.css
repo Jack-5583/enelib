@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Pretendard";
+  src: url("/fonts/PretendardVariable.woff2") format("woff2");
+  font-weight: 45 920;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #161616;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: "Pretendard", ui-sans-serif, system-ui, sans-serif;
+
+  /* sdij monotone design-system tokens (see project/uploads/sdij_myclass_design_system.md) */
+  --color-ink: #161616;
+  --color-ink-8: #16161614;
+  --color-ink-24: rgba(22, 22, 22, 0.24);
+  --color-ink-30: rgba(22, 22, 22, 0.3);
+  --color-ink-40: rgba(22, 22, 22, 0.4);
+  --color-ink-50: rgba(22, 22, 22, 0.5);
+  --color-ink-60: rgba(22, 22, 22, 0.6);
+  --color-ink-70: rgba(22, 22, 22, 0.7);
+  --color-ink-96: rgba(22, 22, 22, 0.96);
+  --color-panel: #f4f4f4;
+  --color-badge-border: #c6c6c6;
+  --color-badge-text: #393939;
+  --color-link: #002a9e;
+  --color-status: #003ce0;
+  --color-danger: #e0362f;
+
+  --radius-app: 2px;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #fff;
+  color: var(--color-ink);
+  font-family: Pretendard, ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+  font-feature-settings: "ss05" 1, "ss06" 1, "ss10" 1;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font-family: inherit;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes efade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes enespin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes enepulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.animate-efade {
+  animation: efade 0.5s ease both;
+}
+.animate-spin-slow {
+  animation: enespin 0.8s linear infinite;
+}
+.animate-pulse-soft {
+  animation: enepulse 1.4s ease-in-out infinite;
+}

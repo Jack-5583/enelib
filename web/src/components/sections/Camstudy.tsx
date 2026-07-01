@@ -1,0 +1,416 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { SegTabs } from "@/components/ui/SegTabs";
+import { Badge } from "@/components/ui/Badge";
+import { Sheet } from "@/components/ui/Sheet";
+import { HandwritingCanvas, type HandwritingCanvasHandle } from "@/components/camstudy/HandwritingCanvas";
+
+const INTERVALS = [5, 10, 15, 30];
+const PEN_COLORS = [
+  { c: "#e0362f", label: "빨강" },
+  { c: "#161616", label: "검정" },
+  { c: "#003ce0", label: "파랑" },
+];
+
+function fmtTime(totalSeconds: number) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(h)}:${p(m)}:${p(s)}`;
+}
+
+interface TimelineEntry {
+  id: string;
+  time: string;
+  end: string;
+  dur: string | null;
+  subject: string | null;
+  title: string | null;
+  photoUrl: string | null;
+  hasMemo: boolean;
+  memoUrl: string | null;
+}
+
+interface TodoOption {
+  id: string;
+  subject: string;
+  title: string;
+}
+
+export function Camstudy() {
+  const [tab, setTab] = useState<"live" | "timeline">("live");
+  const [running, setRunning] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const [interval, setIntervalMin] = useState(10);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [todos, setTodos] = useState<TodoOption[]>([]);
+  const [currentTodoId, setCurrentTodoId] = useState("");
+  const [todaySummary, setTodaySummary] = useState({ sessionsToday: 0, totalSeconds: 0 });
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  const secondsRef = useRef(0);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const captureRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastCaptureRef = useRef<Date | null>(null);
+
+  useEffect(() => {
+    fetch("/api/todos?range=today")
+      .then((r) => r.json())
+      .then((d) => setTodos(d.todos.map((t: { id: string; subject: string; title: string }) => ({ id: t.id, subject: t.subject, title: t.title }))));
+    fetch("/api/camstudy/session")
+      .then((r) => r.json())
+      .then(setTodaySummary);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (tickRef.current) clearInterval(tickRef.current);
+      if (captureRef.current) clearInterval(captureRef.current);
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    },
+    []
+  );
+
+  async function capture(sessionId: string) {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+    const photoUrl = canvas.toDataURL("image/jpeg", 0.7);
+    const segmentStart = lastCaptureRef.current || new Date(Date.now() - interval * 60000);
+    lastCaptureRef.current = new Date();
+    const todo = todos.find((t) => t.id === currentTodoId);
+    await fetch("/api/camstudy/timeline", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        camSessionId: sessionId,
+        subject: todo?.subject,
+        todoTitle: todo?.title,
+        durationLabel: `${interval}분`,
+        photoUrl,
+        segmentStart: segmentStart.toISOString(),
+      }),
+    });
+  }
+
+  async function start() {
+    setCameraError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+    } catch {
+      setCameraError("웹캠에 접근할 수 없어요. 브라우저 권한을 확인해 주세요.");
+      return;
+    }
+
+    const res = await fetch("/api/camstudy/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ intervalMinutes: interval }),
+    });
+    const data = await res.json();
+    sessionIdRef.current = data.id;
+    lastCaptureRef.current = new Date();
+
+    secondsRef.current = 0;
+    setSeconds(0);
+    setRunning(true);
+    tickRef.current = setInterval(() => {
+      secondsRef.current += 1;
+      setSeconds(secondsRef.current);
+    }, 1000);
+    captureRef.current = setInterval(() => {
+      if (sessionIdRef.current) capture(sessionIdRef.current);
+    }, interval * 60000);
+  }
+
+  async function stop() {
+    if (tickRef.current) clearInterval(tickRef.current);
+    if (captureRef.current) clearInterval(captureRef.current);
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setRunning(false);
+    if (sessionIdRef.current) {
+      await fetch(`/api/camstudy/session/${sessionIdRef.current}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ totalSeconds: secondsRef.current }),
+      });
+      sessionIdRef.current = null;
+    }
+    fetch("/api/camstudy/session")
+      .then((r) => r.json())
+      .then(setTodaySummary);
+  }
+
+  return (
+    <div>
+      <SegTabs
+        tabs={[
+          { id: "live" as const, label: "진행" },
+          { id: "timeline" as const, label: "학습 타임라인" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+
+      {tab === "live" ? (
+        <div>
+          <div className="relative mt-7 flex aspect-video w-full items-center justify-center overflow-hidden border border-[#16161614] bg-[repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4_10px,#efefef_10px,#efefef_20px)]">
+            <video ref={videoRef} muted playsInline className="absolute inset-0 h-full w-full object-cover" style={{ display: running ? "block" : "none" }} />
+            {running && (
+              <div className="absolute top-3.5 left-3.5 flex items-center gap-1.5 rounded-[2px] bg-[#161616] px-2.5 py-1">
+                <span className="h-2 w-2 rounded-full bg-white" />
+                <span className="text-[13px] font-medium text-white">REC</span>
+              </div>
+            )}
+            {!running && <span className="font-mono text-[13px] text-[#161616]/40">웹캠 미리보기</span>}
+            <p className="absolute right-0 bottom-4 left-0 m-0 text-center font-mono text-[32px] font-light tracking-[0.04em] text-[#161616] lg:text-[44px]">
+              {fmtTime(seconds)}
+            </p>
+          </div>
+
+          {cameraError && <p className="m-0 py-2 text-center text-[13px] text-[#e0362f]">{cameraError}</p>}
+          <p className="m-0 py-3.5 text-center text-[13px] leading-5 text-[#161616]/50 lg:text-[14px] lg:leading-6">
+            {running ? `녹화 중 · ${interval}분마다 자동 촬영` : "웹캠을 선택하고 학습을 시작하세요"}
+          </p>
+
+          {!running && todos.length > 0 && (
+            <div className="mb-5">
+              <p className="m-0 mb-2.5 text-[14px] leading-6 font-semibold text-[#161616]">지금 학습 중인 투두 (선택)</p>
+              <select
+                value={currentTodoId}
+                onChange={(e) => setCurrentTodoId(e.target.value)}
+                className="w-full border border-[#16161614] bg-transparent px-3 py-2.5 text-[15px] text-[#161616] outline-none"
+              >
+                <option value="">선택 안 함</option>
+                {todos.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.subject} · {t.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <p className="m-0 mb-2.5 text-[14px] leading-6 font-semibold text-[#161616]">자동 촬영 간격</p>
+          <div className="mb-5 flex w-full">
+            {INTERVALS.map((n, i) => (
+              <button
+                key={n}
+                disabled={running}
+                onClick={() => setIntervalMin(n)}
+                className={`flex-1 border border-[#16161614] py-2.5 text-center text-[13px] lg:text-[14px] ${i !== 0 ? "-ml-px" : ""} ${
+                  interval === n ? "bg-[#161616] text-white" : "bg-white text-[#161616]/50"
+                }`}
+              >
+                {n}분
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={running ? stop : start}
+            className={`w-full rounded-[2px] py-4 text-[16px] font-semibold ${
+              running ? "border border-[#161616] bg-white text-[#161616]" : "border-none bg-[#161616] text-white"
+            }`}
+          >
+            {running ? "캠스터디 종료" : "캠스터디 시작"}
+          </button>
+
+          <div className="mt-9 grid grid-cols-2 border-t border-[#16161614]">
+            <div className="py-5 pr-5">
+              <p className="m-0 mb-1 text-[14px] leading-6 text-[#161616]/50">오늘 학습시간</p>
+              <p className="m-0 text-[22px] leading-8 font-light text-[#161616] lg:text-[24px]">{fmtTime(todaySummary.totalSeconds)}</p>
+            </div>
+            <div className="border-l border-[#16161614] py-5 pl-5">
+              <p className="m-0 mb-1 text-[14px] leading-6 text-[#161616]/50">오늘 세션</p>
+              <p className="m-0 text-[22px] leading-8 font-light text-[#161616] lg:text-[24px]">{todaySummary.sessionsToday}회</p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <TimelineView />
+      )}
+    </div>
+  );
+}
+
+function TimelineView() {
+  const [entries, setEntries] = useState<TimelineEntry[]>([]);
+  const [memoEntry, setMemoEntry] = useState<TimelineEntry | null>(null);
+
+  function load() {
+    fetch("/api/camstudy/timeline")
+      .then((r) => r.json())
+      .then(setEntries);
+  }
+  useEffect(load, []);
+
+  const totalLabel = entries.length ? `${entries.length}회` : "0회";
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between border-b border-[#161616]/96 pt-8 pb-4 lg:pt-10 lg:pb-5">
+        <p className="m-0 text-[18px] leading-7 font-semibold text-[#161616] lg:text-[20px] lg:leading-8">오늘 학습 인증</p>
+        <p className="m-0 text-[13px] leading-5 text-[#161616]/50 lg:text-[14px] lg:leading-6">{totalLabel}</p>
+      </div>
+
+      <div className="pt-3">
+        {entries.map((e) => (
+          <div key={e.id} className="flex gap-4 lg:gap-5">
+            <div className="flex w-12 flex-none flex-col items-center pt-5 lg:w-16">
+              <span className="font-mono text-[13px] text-[#161616] lg:text-[14px]">{e.time}</span>
+              <span className="mt-2 h-2.5 w-2.5 rounded-full bg-[#161616]" />
+              <span className="mt-1.5 min-h-5 w-px flex-1 bg-[#16161614]" />
+            </div>
+            <div className="min-w-0 flex-1 py-4 pb-7 lg:py-6">
+              <div className="flex flex-col border border-[#16161614] lg:flex-row">
+                <div className="relative aspect-[4/3] w-full overflow-hidden bg-[repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4_9px,#efefef_9px,#efefef_18px)] lg:w-[220px] lg:flex-none">
+                  {e.photoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={e.photoUrl} alt="캠스터디 캡처" className="absolute inset-0 h-full w-full object-cover" />
+                  )}
+                  {e.hasMemo && e.memoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={e.memoUrl} alt="손글씨 메모" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+                  )}
+                  <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 rounded-[2px] bg-[#161616] px-2.5 py-1">
+                    <span className="inline-flex h-3 w-3 items-center justify-center rounded-full border-[1.5px] border-white" />
+                    <span className="text-[11px] font-semibold text-white">인증됨</span>
+                  </div>
+                  {e.hasMemo && (
+                    <span className="absolute top-2.5 right-2.5 rounded-[2px] border border-[#16161614] bg-white px-1.5 py-0.5 text-[11px] whitespace-nowrap text-[#161616]">
+                      ✎ 메모
+                    </span>
+                  )}
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col p-5">
+                  <div className="mb-2 flex items-center gap-2">
+                    {e.subject && <Badge>{e.subject}</Badge>}
+                    <span className="font-mono text-[13px] text-[#161616]/50">
+                      {e.time}–{e.end}
+                    </span>
+                    {e.dur && <span className="text-[14px] text-[#161616]/45">· {e.dur} 집중</span>}
+                  </div>
+                  <p className="m-0 mb-auto text-[16px] leading-6 text-[#161616] lg:text-[18px] lg:leading-7">
+                    {e.title || "학습 진행 중"}
+                  </p>
+                  <button
+                    onClick={() => setMemoEntry(e)}
+                    className="mt-4 self-start rounded-[2px] border border-[#161616] bg-white px-4.5 py-2.5 text-[14px] font-medium text-[#161616]"
+                  >
+                    ✎ {e.hasMemo ? "손글씨 메모 수정" : "손글씨 메모 추가"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+        {entries.length === 0 && <p className="m-0 py-12 text-center text-[14px] text-[#161616]/40">오늘 캡처된 학습 인증이 없습니다.</p>}
+      </div>
+
+      {memoEntry && (
+        <MemoSheet
+          entry={memoEntry}
+          onClose={() => setMemoEntry(null)}
+          onSaved={() => {
+            setMemoEntry(null);
+            load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function MemoSheet({ entry, onClose, onSaved }: { entry: TimelineEntry; onClose: () => void; onSaved: () => void }) {
+  const [penColor, setPenColor] = useState(PEN_COLORS[0].c);
+  const canvasHandle = useRef<HandwritingCanvasHandle | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    const dataUrl = canvasHandle.current?.getDataUrl();
+    if (!dataUrl) return;
+    setSaving(true);
+    await fetch(`/api/camstudy/timeline/${entry.id}/memo`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dataUrl, penColor }),
+    });
+    setSaving(false);
+    onSaved();
+  }
+  async function del() {
+    setSaving(true);
+    await fetch(`/api/camstudy/timeline/${entry.id}/memo`, { method: "DELETE" });
+    setSaving(false);
+    onSaved();
+  }
+
+  return (
+    <Sheet open onClose={onClose} maxWidth={620}>
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            {entry.subject && <Badge>{entry.subject}</Badge>}
+            <span className="text-[13px] text-[#161616]/50">{entry.time} 캡처</span>
+          </div>
+          <p className="m-0 mt-2.5 text-[16px] leading-6 text-[#161616] lg:text-[18px] lg:leading-7">{entry.title || "학습 진행 중"}</p>
+        </div>
+      </div>
+
+      <div className="relative aspect-[4/3] w-full overflow-hidden border border-[#161616] bg-[repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4_10px,#efefef_10px,#efefef_20px)]" style={{ touchAction: "none" }}>
+        {entry.photoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={entry.photoUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        )}
+        <span className="pointer-events-none absolute top-3 left-3.5 text-[12px] text-[#161616]/40">캡처 화면 위에 손글씨로 메모하세요</span>
+        <HandwritingCanvas ref={canvasHandle} penColor={penColor} initialDataUrl={entry.memoUrl} />
+      </div>
+
+      <div className="flex items-center justify-between pt-4 pb-1">
+        <div className="flex items-center gap-2.5">
+          {PEN_COLORS.map((p) => (
+            <button
+              key={p.c}
+              onClick={() => setPenColor(p.c)}
+              aria-label={p.label}
+              className="h-7 w-7 rounded-full border-2 p-0 lg:h-8 lg:w-8"
+              style={{ background: p.c, borderColor: penColor === p.c ? "#161616" : "transparent", outline: "1px solid #16161614" }}
+            />
+          ))}
+        </div>
+        <button onClick={() => canvasHandle.current?.clear()} className="border-none bg-none p-0 text-[14px] text-[#161616]/50 underline underline-offset-[3px]">
+          전체 지우기
+        </button>
+      </div>
+
+      <div className="mt-4 flex gap-2.5">
+        {entry.hasMemo && (
+          <button onClick={del} disabled={saving} className="w-[88px] flex-none rounded-[2px] border border-[#c6c6c6] bg-white py-3.5 text-[15px] font-medium text-[#161616] disabled:opacity-50 lg:w-[100px]">
+            삭제
+          </button>
+        )}
+        <button onClick={onClose} className="hidden w-[100px] flex-none rounded-[2px] border border-[#161616] bg-white py-3.5 text-[15px] font-medium text-[#161616] lg:block">
+          취소
+        </button>
+        <button onClick={save} disabled={saving} className="flex-1 rounded-[2px] border-none bg-[#161616] py-3.5 text-[16px] font-semibold text-white disabled:opacity-50">
+          메모 저장
+        </button>
+      </div>
+    </Sheet>
+  );
+}

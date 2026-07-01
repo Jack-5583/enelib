@@ -1,0 +1,237 @@
+// ene lib — data model
+// Mirrors the state shapes found in the Claude Design prototypes
+// (project/ene lib.dc.html, project/ene lib (Mobile).dc.html)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  STUDENT
+  PARENT
+}
+
+enum ExamType {
+  MOCK   // 모평
+  HAKPYUNG // 학평
+  NAESIN // 내신
+  PRIVATE // 사설
+  CSAT   // 수능
+}
+
+enum VerificationPurpose {
+  LOGIN
+  SIGNUP
+}
+
+enum VerificationStatus {
+  PENDING
+  CHECKING
+  VERIFIED
+  EXPIRED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  role      Role
+  name      String
+  schoolLabel String @default("고3")
+  createdAt DateTime @default(now())
+
+  notificationSettings NotificationSettings?
+
+  // student-owned data
+  books        Book[]
+  examPapers   ExamPaper[]
+  todos        Todo[]
+  exams        Exam[]
+  camSessions  CamSession[]
+  timelineEntries TimelineEntry[]
+  studentAuthCodes StudentAuthCode[]
+
+  // parent <-> student links
+  parentLinks  ParentStudentLink[] @relation("ParentLinks")
+  studentLinks ParentStudentLink[] @relation("StudentLinks")
+
+  sessions Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([userId])
+}
+
+/// Long random code a student generates to hand to a parent so the parent
+/// can link their account (separate from the OCTOMO SMS verification code).
+model StudentAuthCode {
+  id        String   @id @default(cuid())
+  studentId String
+  student   User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  code      String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+  usedByParentId String?
+
+  @@index([studentId])
+}
+
+model ParentStudentLink {
+  id        String   @id @default(cuid())
+  parentId  String
+  parent    User     @relation("ParentLinks", fields: [parentId], references: [id], onDelete: Cascade)
+  studentId String
+  student   User     @relation("StudentLinks", fields: [studentId], references: [id], onDelete: Cascade)
+  linkedAt  DateTime @default(now())
+
+  @@unique([parentId, studentId])
+  @@index([studentId])
+}
+
+/// OCTOMO phone verification attempt — used for both login and signup.
+model VerificationRequest {
+  id            String   @id @default(cuid())
+  phone         String
+  purpose       VerificationPurpose
+  // Long random alphanumeric string embedded in the SMS body OCTOMO matches on.
+  verifyCode    String   @unique
+  status        VerificationStatus @default(PENDING)
+  // Staged signup fields, consumed once verification succeeds.
+  pendingRole       Role?
+  pendingName       String?
+  pendingStudentCode String?
+  createdAt     DateTime @default(now())
+  expiresAt     DateTime
+  verifiedAt    DateTime?
+
+  @@index([phone])
+  @@index([verifyCode])
+}
+
+model NotificationSettings {
+  id        String  @id @default(cuid())
+  userId    String  @unique
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  todoEnabled Boolean @default(true)
+  examEnabled Boolean @default(true)
+  camEnabled  Boolean @default(false)
+}
+
+model Book {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  subject   String
+  title     String
+  publisher String
+  tags      String[]
+  createdAt DateTime @default(now())
+
+  todos Todo[]
+
+  @@index([ownerId])
+}
+
+model ExamPaper {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  subject   String
+  title     String
+  tag       String
+  examDate  String
+  createdAt DateTime @default(now())
+
+  @@index([ownerId])
+}
+
+model Todo {
+  id         String    @id @default(cuid())
+  ownerId    String
+  owner      User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  subject    String
+  title      String
+  date       DateTime  @db.Date
+  done       Boolean   @default(false)
+  bookId     String?
+  book       Book?     @relation(fields: [bookId], references: [id], onDelete: SetNull)
+  materialLabel String?
+  memo       String?
+  photoUrl   String?
+  createdAt  DateTime  @default(now())
+
+  @@index([ownerId, date])
+}
+
+model Exam {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  subject   String
+  type      ExamType
+  name      String
+  date      String
+  raw       Int
+  grade     Int
+  pct       Int?
+  std       Int?
+  wrong     String[]
+  memo      String?
+  createdAt DateTime @default(now())
+
+  @@index([ownerId, subject])
+}
+
+model CamSession {
+  id           String    @id @default(cuid())
+  ownerId      String
+  owner        User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+  intervalMinutes Int    @default(10)
+  totalSeconds Int       @default(0)
+
+  timelineEntries TimelineEntry[]
+
+  @@index([ownerId])
+}
+
+model TimelineEntry {
+  id            String   @id @default(cuid())
+  ownerId       String
+  owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  camSessionId  String?
+  camSession    CamSession? @relation(fields: [camSessionId], references: [id], onDelete: SetNull)
+  capturedAt    DateTime @default(now())
+  endedAt       DateTime?
+  subject       String?
+  todoTitle     String?
+  durationLabel String?
+  photoUrl      String?
+  createdAt     DateTime @default(now())
+
+  memo TimelineMemo?
+
+  @@index([ownerId, capturedAt])
+}
+
+model TimelineMemo {
+  id              String   @id @default(cuid())
+  timelineEntryId String   @unique
+  timelineEntry   TimelineEntry @relation(fields: [timelineEntryId], references: [id], onDelete: Cascade)
+  dataUrl         String   @db.Text
+  penColor        String   @default("#e0362f")
+  updatedAt       DateTime @updatedAt
+}

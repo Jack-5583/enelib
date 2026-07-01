@@ -1,0 +1,54 @@
+import "server-only";
+import { prisma } from "@/lib/prisma";
+
+export const DEFAULT_SUBJECTS = ["국어", "수학", "영어", "생명과학1", "지구과학1"];
+export const EXAM_TYPES = ["MOCK", "HAKPYUNG", "NAESIN", "PRIVATE", "CSAT"] as const;
+export const EXAM_TYPE_LABEL: Record<string, string> = {
+  MOCK: "모평",
+  HAKPYUNG: "학평",
+  NAESIN: "내신",
+  PRIVATE: "사설",
+  CSAT: "수능",
+};
+export const EXAM_TYPE_FROM_LABEL: Record<string, string> = Object.fromEntries(
+  Object.entries(EXAM_TYPE_LABEL).map(([k, v]) => [v, k])
+);
+
+export async function getSubjectChips(ownerId: string) {
+  const rows = await prisma.exam.findMany({ where: { ownerId }, select: { subject: true }, distinct: ["subject"] });
+  const subjects = new Set(DEFAULT_SUBJECTS);
+  for (const r of rows) subjects.add(r.subject);
+  return [...subjects];
+}
+
+export function buildSubjectTrend(exams: { date: string; grade: number }[], width: number, height: number) {
+  const sorted = [...exams].sort((a, b) => a.date.localeCompare(b.date));
+  const padX = width * 0.065;
+  const padTop = height * 0.15;
+  const padBot = height * 0.15;
+  const n = sorted.length;
+  const x = (i: number) => padX + (n <= 1 ? (width - 2 * padX) / 2 : (i * (width - 2 * padX)) / (n - 1));
+  const y = (g: number) => padTop + ((g - 1) / 8) * (height - padTop - padBot);
+  return {
+    W: width,
+    H: height,
+    points: sorted.map((e, i) => `${x(i).toFixed(1)},${y(e.grade).toFixed(1)}`).join(" "),
+    dots: sorted.map((e, i) => ({ cx: x(i).toFixed(1), cy: y(e.grade).toFixed(1), label: e.date.slice(3) })),
+  };
+}
+
+export function buildSubjectSummary(exams: { type: string; grade: number }[]) {
+  const grades = exams.map((e) => e.grade);
+  const stdEx = exams.filter((e) => e.type === "MOCK" || e.type === "HAKPYUNG");
+  let deltaLabel = exams.length ? `기록 ${exams.length}개` : "기록 없음";
+  if (stdEx.length >= 2) {
+    const d = stdEx[1].grade - stdEx[0].grade;
+    deltaLabel = d > 0 ? `▾ ${d}등급 상승` : d < 0 ? `▴ ${-d}등급 하락` : "변동 없음";
+  }
+  return {
+    latest: grades.length ? grades[0] : null,
+    best: grades.length ? Math.min(...grades) : null,
+    count: exams.length,
+    deltaLabel,
+  };
+}
