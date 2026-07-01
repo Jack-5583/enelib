@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>
+  *{box-sizing:border-box;font-feature-settings:"ss05" 1,"ss06" 1,"ss10" 1;}
+  html,body{margin:0;padding:0;background:#fff;color:#161616;font-family:Pretendard,ui-sans-serif,system-ui,sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .sh::-webkit-scrollbar{display:none;}
+  .sh{-ms-overflow-style:none;scrollbar-width:none;}
+  @keyframes efade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+  @keyframes enespin{to{transform:rotate(360deg);}}
+  @keyframes enepulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  button{font-family:inherit;cursor:pointer;}
+</style>
+<script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@04f46c6a0708418cb7b96fc563eacae0fbf77674/qrcode.min.js"></script>
+</helmet>
+
+<div style="display:flex;flex-direction:column;height:100dvh;width:100%;background:#fff;overflow:hidden;">
+
+  <sc-if value="{{ showAuth }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:1;display:flex;justify-content:center;overflow-y:auto;" class="sh">
+      <div style="width:100%;max-width:1280px;padding:0 40px;display:flex;flex-direction:column;">
+        <div style="height:80px;display:flex;align-items:center;">
+          <span style="font-size:22px;font-weight:700;letter-spacing:-0.03em;color:#161616;">ene<span style="font-weight:300;"> lib</span></span>
+        </div>
+        <div style="flex:1;display:flex;align-items:center;padding:40px 0 120px;">
+          <div style="width:100%;max-width:440px;animation:efade .5s ease both;">
+
+            <!-- LANDING -->
+            <sc-if value="{{ authLanding }}" hint-placeholder-val="{{ true }}">
+              <h1 style="font-size:38px;line-height:52px;font-weight:200;letter-spacing:-0.02em;color:#161616;margin:8px 0 8px;">공부의 모든 기록을<br>한 곳에서.</h1>
+              <p style="font-size:16px;line-height:28px;font-weight:400;color:rgba(22,22,22,0.5);margin:0 0 44px;">교재와 연결된 투두, 캠스터디, 성적 추적까지.</p>
+              <button onClick="{{ goLogin }}" style="width:100%;background:#161616;color:#fff;border:none;border-radius:2px;padding:17px 0;font-size:16px;font-weight:600;margin-bottom:10px;">로그인</button>
+              <button onClick="{{ goSignupRole }}" style="width:100%;background:#fff;color:#161616;border:1px solid #161616;border-radius:2px;padding:16px 0;font-size:16px;font-weight:500;">회원가입</button>
+              <div style="display:flex;align-items:center;gap:10px;margin-top:32px;padding:16px 18px;background:#f4f4f4;">
+                <span style="width:34px;height:34px;flex:none;border-radius:50%;background:#161616;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;letter-spacing:-0.03em;">O</span>
+                <p style="font-size:13px;line-height:21px;color:rgba(22,22,22,0.6);margin:0;"><span style="font-weight:600;color:#161616;">OCTOMO 문자 인증</span> · 비밀번호 없이 내 휴대폰에서 보내는 문자로 본인 확인해요.</p>
+              </div>
+            </sc-if>
+
+            <!-- LOGIN -->
+            <sc-if value="{{ authLoginStep }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ backLanding }}" style="background:none;border:none;padding:0 0 24px;font-size:14px;color:rgba(22,22,22,0.5);">← 뒤로</button>
+              <h1 style="font-size:32px;line-height:44px;font-weight:200;letter-spacing:-0.02em;color:#161616;margin:0 0 8px;">로그인</h1>
+              <p style="font-size:15px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 36px;">가입한 휴대폰 번호로 인증해요.</p>
+              <p style="font-size:14px;line-height:24px;font-weight:600;color:#161616;margin:0 0 8px;">휴대폰 번호</p>
+              <input value="{{ phone }}" onInput="{{ onPhone }}" inputmode="numeric" placeholder="010-0000-0000" style="width:100%;border:none;border-bottom:1px solid rgba(22,22,22,0.5);background:transparent;padding:14px 0;font-size:22px;color:#161616;outline:none;margin-bottom:32px;">
+              <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:#f4f4f4;margin-bottom:20px;">
+                <span style="width:30px;height:30px;flex:none;border-radius:50%;background:#161616;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;">O</span>
+                <p style="font-size:13px;line-height:20px;color:rgba(22,22,22,0.6);margin:0;">다음 화면에서 <span style="font-weight:600;color:#161616;">내 휴대폰이 인증 문자를 발송</span>합니다. 통신 요금이 발생하지 않아요.</p>
+              </div>
+              <button onClick="{{ startVerify }}" style="{{ proceedStyle }}">OCTOMO로 인증하기</button>
+              <p style="font-size:14px;line-height:22px;color:rgba(22,22,22,0.5);text-align:center;margin:20px 0 0;">아직 회원이 아니세요? <button onClick="{{ goSignupRole }}" style="background:none;border:none;padding:0;font-size:14px;color:#161616;text-decoration:underline;text-underline-offset:3px;">회원가입</button></p>
+            </sc-if>
+
+            <!-- SIGNUP ROLE -->
+            <sc-if value="{{ authSignupRole }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ backLanding }}" style="background:none;border:none;padding:0 0 24px;font-size:14px;color:rgba(22,22,22,0.5);">← 뒤로</button>
+              <h1 style="font-size:32px;line-height:44px;font-weight:200;letter-spacing:-0.02em;color:#161616;margin:0 0 8px;">회원가입</h1>
+              <p style="font-size:15px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 28px;">어떻게 시작할까요?</p>
+              <div style="display:flex;flex-direction:column;gap:0;border-top:1px solid rgba(22,22,22,0.96);">
+                <button onClick="{{ pickStudent }}" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:none;border-bottom:1px solid #16161614;padding:22px 0;text-align:left;">
+                  <span><span style="display:block;font-size:20px;line-height:32px;font-weight:400;color:#161616;">학생으로 시작</span><span style="display:block;font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);">투두 · 캠스터디 · 성적 관리</span></span>
+                  <span style="font-size:16px;color:#161616;">→</span>
+                </button>
+                <button onClick="{{ pickParent }}" style="display:flex;align-items:center;justify-content:space-between;background:#fff;border:none;border-bottom:1px solid #16161614;padding:22px 0;text-align:left;">
+                  <span><span style="display:block;font-size:20px;line-height:32px;font-weight:400;color:#161616;">학부모로 시작</span><span style="display:block;font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);">자녀 학생코드로 현황 연동</span></span>
+                  <span style="font-size:16px;color:#161616;">→</span>
+                </button>
+              </div>
+            </sc-if>
+
+            <!-- SIGNUP FORM -->
+            <sc-if value="{{ authSignupStep }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ backRole }}" style="background:none;border:none;padding:0 0 24px;font-size:14px;color:rgba(22,22,22,0.5);">← 뒤로</button>
+              <h1 style="font-size:32px;line-height:44px;font-weight:200;letter-spacing:-0.02em;color:#161616;margin:0 0 8px;">{{ roleLabel }} 회원가입</h1>
+              <p style="font-size:15px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 32px;">휴대폰 번호로 가입해요. 아이디·비밀번호가 없습니다.</p>
+              <p style="font-size:14px;line-height:24px;font-weight:600;color:#161616;margin:0 0 8px;">휴대폰 번호</p>
+              <input value="{{ phone }}" onInput="{{ onPhone }}" inputmode="numeric" placeholder="010-0000-0000" style="width:100%;border:none;border-bottom:1px solid rgba(22,22,22,0.5);background:transparent;padding:14px 0;font-size:22px;color:#161616;outline:none;margin-bottom:28px;">
+              <sc-if value="{{ isParentSignup }}" hint-placeholder-val="{{ false }}">
+                <p style="font-size:14px;line-height:24px;font-weight:600;color:#161616;margin:0 0 8px;">학생 코드 <span style="color:#e0362f;">*</span></p>
+                <input value="{{ studentCode }}" onInput="{{ onCode }}" placeholder="ENE-0000-XX" style="width:100%;border:none;border-bottom:1px solid rgba(22,22,22,0.5);background:transparent;padding:14px 0;font-family:ui-monospace,Menlo,monospace;font-size:20px;letter-spacing:0.06em;color:#161616;outline:none;margin-bottom:8px;">
+                <p style="font-size:13px;line-height:21px;color:rgba(22,22,22,0.5);margin:0 0 28px;">자녀의 학생 앱 <span style="color:#161616;">설정 › 학부모 연동 › 인증코드</span>에서 확인할 수 있어요. 학부모는 학생 코드가 있어야 가입됩니다.</p>
+              </sc-if>
+              <button onClick="{{ toggleAgree }}" style="display:flex;align-items:flex-start;gap:12px;width:100%;background:none;border:none;padding:0;text-align:left;margin-bottom:24px;">
+                <span style="{{ agreeBox }}">{{ agreeCheck }}</span>
+                <span style="font-size:14px;line-height:22px;color:rgba(22,22,22,0.6);">만 14세 이상이며 <span style="color:#161616;text-decoration:underline;text-underline-offset:2px;">서비스 이용약관</span> 및 <span style="color:#161616;text-decoration:underline;text-underline-offset:2px;">개인정보 처리방침</span>에 동의합니다.</span>
+              </button>
+              <button onClick="{{ startVerify }}" style="{{ proceedStyle }}">OCTOMO로 인증하고 가입</button>
+            </sc-if>
+
+            <!-- OCTOMO VERIFY -->
+            <sc-if value="{{ authVerify }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:28px;">
+                <span style="width:38px;height:38px;flex:none;border-radius:50%;background:#161616;color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;letter-spacing:-0.03em;">O</span>
+                <div>
+                  <p style="font-size:16px;line-height:22px;font-weight:600;color:#161616;margin:0;">OCTOMO 문자 인증</p>
+                  <p style="font-size:13px;line-height:18px;color:rgba(22,22,22,0.5);margin:0;">{{ verifyPhoneLabel }}</p>
+                </div>
+              </div>
+
+              <sc-if value="{{ verifyReady }}" hint-placeholder-val="{{ true }}">
+                <h1 style="font-size:30px;line-height:42px;font-weight:200;letter-spacing:-0.02em;color:#161616;margin:0 0 10px;">휴대폰으로 QR을<br>스캔해 주세요.</h1>
+                <p style="font-size:15px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 28px;">PC에서는 문자를 보낼 수 없어요. 휴대폰 카메라로 QR을 스캔하면 메시지 앱이 자동으로 열립니다. 그대로 전송하면 OCTOMO가 발신 번호를 확인해 본인 인증을 완료해요.</p>
+                <div style="display:flex;gap:24px;align-items:center;">
+                  <div style="flex:none;width:180px;height:180px;border:1px solid #161616;display:flex;align-items:center;justify-content:center;padding:10px;">
+                    <div id="octomo-qr" style="width:160px;height:160px;"></div>
+                  </div>
+                  <div style="flex:1;min-width:0;">
+                    <p style="font-size:13px;line-height:20px;color:rgba(22,22,22,0.5);margin:0 0 4px;">받는 번호</p>
+                    <p style="font-family:ui-monospace,Menlo,monospace;font-size:18px;letter-spacing:0.04em;color:#161616;margin:0 0 16px;">{{ octoNumber }}</p>
+                    <p style="font-size:13px;line-height:20px;color:rgba(22,22,22,0.5);margin:0 0 4px;">인증 문구</p>
+                    <p style="font-family:ui-monospace,Menlo,monospace;font-size:18px;letter-spacing:0.04em;color:#161616;margin:0;">{{ octoCode }}</p>
+                  </div>
+                </div>
+                <button onClick="{{ sendSms }}" style="width:100%;background:#161616;color:#fff;border:none;border-radius:2px;padding:17px 0;font-size:16px;font-weight:600;margin-top:28px;">문자 전송 완료 · 인증 확인</button>
+                <button onClick="{{ backLanding }}" style="width:100%;background:none;border:none;padding:18px 0 0;font-size:14px;color:rgba(22,22,22,0.5);">취소</button>
+              </sc-if>
+
+              <sc-if value="{{ verifyChecking }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 0;">
+                  <span style="width:56px;height:56px;border:3px solid #16161618;border-top-color:#161616;border-radius:50%;animation:enespin .8s linear infinite;"></span>
+                  <p style="font-size:20px;line-height:30px;font-weight:400;color:#161616;margin:30px 0 6px;">발신 문자 확인 중…</p>
+                  <p style="font-size:15px;line-height:24px;color:rgba(22,22,22,0.5);text-align:center;margin:0;">OCTOMO가 방금 보낸 문자의 발신 번호를 확인하고 있어요.</p>
+                  <p style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:rgba(22,22,22,0.4);margin:26px 0 0;animation:enepulse 1.4s ease-in-out infinite;">{{ octoNumber }} · {{ octoCode }}</p>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ verifyDone }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 0;">
+                  <span style="width:60px;height:60px;border-radius:50%;background:#161616;display:flex;align-items:center;justify-content:center;"><span style="width:17px;height:28px;border:3px solid #fff;border-top:none;border-left:none;transform:rotate(42deg) translate(-1px,-2px);"></span></span>
+                  <p style="font-size:22px;line-height:32px;font-weight:400;color:#161616;margin:26px 0 6px;">인증 완료</p>
+                  <p style="font-size:15px;line-height:24px;color:rgba(22,22,22,0.5);text-align:center;margin:0;">본인 확인이 끝났어요. 잠시 후 이동합니다.</p>
+                </div>
+              </sc-if>
+            </sc-if>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showApp }}" hint-placeholder-val="{{ false }}">
+    <!-- HEADER -->
+    <div style="position:sticky;top:0;z-index:50;background:#fff;display:flex;width:100%;justify-content:center;flex:none;">
+      <div style="width:100%;max-width:1280px;padding:0 40px;height:80px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:28px;">
+          <span style="font-size:22px;font-weight:700;letter-spacing:-0.03em;color:#161616;">ene<span style="font-weight:300;"> lib</span></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:20px;">
+          <div style="display:flex;flex:none;border:1px solid #16161614;border-radius:2px;overflow:hidden;">
+            <button onClick="{{ toStudent }}" style="border:none;padding:7px 14px;font-size:14px;line-height:20px;white-space:nowrap;background:{{ studentTabBg }};color:{{ studentTabColor }};">학생</button>
+            <button onClick="{{ toParent }}" style="border:none;padding:7px 14px;font-size:14px;line-height:20px;white-space:nowrap;background:{{ parentTabBg }};color:{{ parentTabColor }};">학부모</button>
+          </div>
+          <button onClick="{{ goSettings }}" style="background:none;border:none;padding:0;font-size:18px;line-height:32px;font-weight:400;color:#161616;white-space:nowrap;"><span style="font-weight:600;margin-right:8px;">{{ userSchool }}</span>{{ userName }} 님</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCROLL AREA -->
+    <div style="flex:1;overflow-y:auto;" class="sh">
+      <div style="display:flex;width:100%;justify-content:center;min-height:100%;">
+        <div style="width:100%;max-width:1280px;padding:0 40px;display:flex;gap:40px;align-items:flex-start;">
+
+          <!-- LEFT MEGA MENU -->
+          <div style="width:300px;flex:none;position:sticky;top:0;padding:32px 0 40px;">
+            <sc-for list="{{ menu }}" as="m" hint-placeholder-count="5">
+              <button onClick="{{ m.go }}" style="{{ m.style }}">{{ m.label }}</button>
+            </sc-for>
+            <div style="margin-top:40px;padding-top:24px;border-top:1px solid #16161614;">
+              <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 6px;">{{ ddayTargetLabel }}</p>
+              <p style="font-size:44px;line-height:52px;font-weight:200;letter-spacing:-0.02em;color:#161616;margin:0;">D-{{ dday }}</p>
+            </div>
+          </div>
+
+          <!-- RIGHT CONTENT -->
+          <div style="flex:1;min-width:0;max-width:660px;padding:0 0 96px;">
+
+            <!-- ============ DASHBOARD ============ -->
+            <sc-if value="{{ secDash }}" hint-placeholder-val="{{ true }}">
+              <div style="">
+                <div style="display:flex;align-items:flex-end;justify-content:space-between;padding-top:32px;">
+                  <div>
+                    <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 4px;">{{ todayLabel }}</p>
+                    <h2 style="font-size:28px;line-height:40px;font-weight:200;letter-spacing:-0.02em;color:#161616;margin:0;">{{ userName }}님, 오늘도 시작해볼까요.</h2>
+                  </div>
+                  <div style="display:flex;width:120px;flex:none;">
+                    <button onClick="{{ setDashA }}" style="{{ dashAStyle }}">A</button>
+                    <button onClick="{{ setDashB }}" style="{{ dashBStyle }}">B</button>
+                  </div>
+                </div>
+
+                <!-- Variant A -->
+                <sc-if value="{{ dashVar1 }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;align-items:stretch;gap:20px;background:#f4f4f4;padding:24px;margin-top:28px;">
+                    <div style="flex:none;padding-right:20px;border-right:1px solid #16161614;">
+                      <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 2px;">수능까지</p>
+                      <p style="font-size:44px;line-height:52px;font-weight:200;letter-spacing:-0.02em;color:#161616;margin:0;">D-{{ dday }}</p>
+                    </div>
+                    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;">
+                      <p style="font-size:16px;line-height:26px;font-weight:500;color:#161616;margin:0 0 4px;">“{{ quote }}”</p>
+                      <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0;">— {{ quoteAuthor }}</p>
+                    </div>
+                  </div>
+
+                  <div style="border-bottom:1px solid rgba(22,22,22,0.96);padding:44px 0 20px;display:flex;align-items:baseline;justify-content:space-between;">
+                    <p style="font-size:20px;line-height:32px;font-weight:600;color:#161616;margin:0;">이번 주 투두 완료율</p>
+                    <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0;">{{ weekDone }} / {{ weekTotal }}개 완료</p>
+                  </div>
+                  <div style="display:flex;align-items:flex-end;gap:6px;padding:22px 0 4px;">
+                    <span style="font-size:52px;line-height:1;font-weight:200;letter-spacing:-0.02em;color:#161616;">{{ weekPct }}</span>
+                    <span style="font-size:20px;line-height:1;font-weight:300;color:rgba(22,22,22,0.5);padding-bottom:4px;">%</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:12px;padding:20px 0 4px;">
+                    <sc-for list="{{ weekBars }}" as="b" hint-placeholder-count="5">
+                      <div style="display:flex;align-items:center;gap:14px;">
+                        <span style="width:78px;flex:none;font-size:14px;line-height:24px;color:#161616;">{{ b.name }}</span>
+                        <span style="flex:1;height:6px;background:#e2e2e2;position:relative;overflow:hidden;"><span style="{{ b.fillStyle }}"></span></span>
+                        <span style="width:44px;flex:none;text-align:right;font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);">{{ b.label }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+
+                  <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #16161614;margin-top:36px;">
+                    <div style="padding:20px 20px 20px 0;border-bottom:1px solid #16161614;">
+                      <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 4px;">누적 학습시간</p>
+                      <p style="font-size:24px;line-height:32px;font-weight:300;color:#161616;margin:0;">{{ cumHours }}</p>
+                    </div>
+                    <div style="padding:20px 0 20px 20px;border-left:1px solid #16161614;border-bottom:1px solid #16161614;">
+                      <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 4px;">이번 주 학습시간</p>
+                      <p style="font-size:24px;line-height:32px;font-weight:300;color:#161616;margin:0;">{{ weekHours }}</p>
+                    </div>
+                    <div style="padding:20px 20px 20px 0;">
+                      <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 4px;">하루 평균</p>
+                      <p style="font-size:24px;line-height:32px;font-weight:300;color:#161616;margin:0;">{{ avgDay }}</p>
+                    </div>
+                    <div style="padding:20px 0 20px 20px;border-left:1px solid #16161614;">
+                      <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 4px;">연속 학습</p>
+                      <p style="font-size:24px;line-height:32px;font-weight:300;color:#161616;margin:0;">{{ streakDays }}</p>
+                    </div>
+                  </div>
+
+                  <div style="border-bottom:1px solid rgba(22,22,22,0.96);padding:44px 0 20px;display:flex;align-items:baseline;justify-content:space-between;">
+                    <p style="font-size:20px;line-height:32px;font-weight:600;color:#161616;margin:0;">오늘의 투두</p>
+                    <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0;">{{ doneCount }} / {{ totalCount }}</p>
+                  </div>
+                  <sc-for list="{{ todosDaily }}" as="t" hint-placeholder-count="5">
+                    <div style="display:flex;align-items:flex-start;gap:14px;border-bottom:1px solid #16161614;padding:18px 0;">
+                      <button onClick="{{ t.toggle }}" style="{{ t.boxStyle }}">{{ t.check }}</button>
+                      <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                          <span style="{{ t.badgeStyle }}">{{ t.subject }}</span>
+                          <span style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.material }}</span>
+                        </div>
+                        <p style="{{ t.titleStyle }}margin:0;">{{ t.title }}</p>
+                      </div>
+                    </div>
+                  </sc-for>
+                </sc-if>
+
+                <!-- Variant B -->
+                <sc-if value="{{ dashVar2 }}" hint-placeholder-val="{{ false }}">
+                  <div style="border:1px solid #161616;margin-top:28px;display:flex;flex-direction:column;">
+                    <div style="padding:32px;border-bottom:1px solid #161616;display:flex;align-items:flex-end;justify-content:space-between;">
+                      <div>
+                        <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 6px;">{{ ddayTargetLabel }}</p>
+                        <p style="font-size:72px;line-height:1;font-weight:200;letter-spacing:-0.03em;color:#161616;margin:0;">D-{{ dday }}</p>
+                      </div>
+                      <div style="text-align:right;max-width:260px;">
+                        <p style="font-size:15px;line-height:24px;font-weight:500;color:#161616;margin:0 0 4px;">“{{ quote }}”</p>
+                        <p style="font-size:13px;line-height:20px;color:rgba(22,22,22,0.5);margin:0;">— {{ quoteAuthor }}</p>
+                      </div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;">
+                      <div style="padding:18px 16px;border-right:1px solid #16161614;">
+                        <p style="font-size:13px;line-height:20px;color:rgba(22,22,22,0.5);margin:0 0 4px;">완료율</p>
+                        <p style="font-size:22px;line-height:28px;font-weight:300;color:#161616;margin:0;">{{ weekPct }}%</p>
+                      </div>
+                      <div style="padding:18px 16px;border-right:1px solid #16161614;">
+                        <p style="font-size:13px;line-height:20px;color:rgba(22,22,22,0.5);margin:0 0 4px;">주간 학습</p>
+                        <p style="font-size:22px;line-height:28px;font-weight:300;color:#161616;margin:0;">{{ weekHours }}</p>
+                      </div>
+                      <div style="padding:18px 16px;border-right:1px solid #16161614;">
+                        <p style="font-size:13px;line-height:20px;color:rgba(22,22,22,0.5);margin:0 0 4px;">누적</p>
+                        <p style="font-size:22px;line-height:28px;font-weight:300;color:#161616;margin:0;">{{ cumHours }}</p>
+                      </div>
+                      <div style="padding:18px 16px;">
+                        <p style="font-size:13px;line-height:20px;color:rgba(22,22,22,0.5);margin:0 0 4px;">연속</p>
+                        <p style="font-size:22px;line-height:28px;font-weight:300;color:#161616;margin:0;">{{ streakDays }}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style="display:flex;gap:40px;margin-top:32px;align-items:flex-start;">
+                    <div style="flex:1;min-width:0;">
+                      <p style="font-size:16px;line-height:28px;font-weight:600;color:#161616;margin:0 0 12px;border-bottom:1px solid rgba(22,22,22,0.96);padding-bottom:14px;">과목별 진도</p>
+                      <div style="display:flex;flex-direction:column;gap:12px;padding-top:16px;">
+                        <sc-for list="{{ weekBars }}" as="b" hint-placeholder-count="5">
+                          <div style="display:flex;align-items:center;gap:12px;">
+                            <span style="width:70px;flex:none;font-size:13px;line-height:22px;color:#161616;">{{ b.name }}</span>
+                            <span style="flex:1;height:5px;background:#e2e2e2;position:relative;overflow:hidden;"><span style="{{ b.fillStyle }}"></span></span>
+                            <span style="width:40px;flex:none;text-align:right;font-size:13px;line-height:22px;color:rgba(22,22,22,0.5);">{{ b.label }}</span>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </div>
+                    <div style="width:240px;flex:none;">
+                      <p style="font-size:16px;line-height:28px;font-weight:600;color:#161616;margin:0 0 12px;border-bottom:1px solid rgba(22,22,22,0.96);padding-bottom:14px;">오늘의 투두</p>
+                      <sc-for list="{{ todosDaily }}" as="t" hint-placeholder-count="4">
+                        <div style="display:flex;align-items:center;gap:10px;border-bottom:1px solid #16161614;padding:12px 0;">
+                          <button onClick="{{ t.toggle }}" style="{{ t.boxStyle }}">{{ t.check }}</button>
+                          <p style="{{ t.titleStyle }}margin:0;font-size:14px;line-height:20px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ t.title }}</p>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <!-- ============ TODO ============ -->
+            <sc-if value="{{ secTodo }}" hint-placeholder-val="{{ false }}">
+              <div style="">
+                <div style="display:flex;width:100%;padding-top:32px;">
+                  <sc-for list="{{ todoTabs }}" as="tb" hint-placeholder-count="2">
+                    <button onClick="{{ tb.go }}" style="{{ tb.style }}">{{ tb.label }}</button>
+                  </sc-for>
+                </div>
+
+                <sc-if value="{{ todoDailyTab }}" hint-placeholder-val="{{ true }}">
+                  <div style="border-bottom:1px solid rgba(22,22,22,0.96);padding:40px 0 20px;display:flex;align-items:baseline;justify-content:space-between;">
+                    <p style="font-size:20px;line-height:32px;font-weight:600;color:#161616;margin:0;">2026년 7월 1일 (수)</p>
+                    <button style="background:none;border:none;font-size:16px;line-height:28px;color:#161616;text-decoration:underline;text-underline-offset:3px;padding:0;">+ 투두 추가</button>
+                  </div>
+                  <sc-for list="{{ todosDaily }}" as="t" hint-placeholder-count="5">
+                    <div style="display:flex;align-items:flex-start;gap:14px;border-bottom:1px solid #16161614;padding:20px 0;">
+                      <button onClick="{{ t.toggle }}" style="{{ t.boxStyle }}">{{ t.check }}</button>
+                      <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                          <span style="{{ t.badgeStyle }}">{{ t.subject }}</span>
+                          <span style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🔗 {{ t.material }}</span>
+                        </div>
+                        <p style="{{ t.titleStyle }}margin:0 0 6px;">{{ t.title }}</p>
+                        <button style="background:none;border:none;padding:0;font-size:14px;line-height:24px;color:#002a9e;text-decoration:underline;text-underline-offset:3px;">완료 인증 · 메모</button>
+                      </div>
+                    </div>
+                  </sc-for>
+                </sc-if>
+
+                <sc-if value="{{ todoWeeklyTab }}" hint-placeholder-val="{{ false }}">
+                  <div style="border-bottom:1px solid rgba(22,22,22,0.96);padding:40px 0 20px;">
+                    <p style="font-size:20px;line-height:32px;font-weight:600;color:#161616;margin:0;">6월 29일 – 7월 5일</p>
+                  </div>
+                  <sc-for list="{{ weeklyPlan }}" as="d" hint-placeholder-count="7">
+                    <div style="display:flex;align-items:center;gap:16px;border-bottom:1px solid #16161614;padding:18px 0;">
+                      <div style="width:70px;flex:none;">
+                        <span style="{{ d.dayStyle }}">{{ d.day }}</span>
+                        <span style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.4);margin-left:6px;">{{ d.date }}</span>
+                      </div>
+                      <span style="flex:1;height:6px;background:#e2e2e2;position:relative;overflow:hidden;"><span style="{{ d.fillStyle }}"></span></span>
+                      <span style="width:56px;flex:none;text-align:right;{{ d.numStyle }}">{{ d.count }}</span>
+                    </div>
+                  </sc-for>
+                  <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);padding-top:20px;margin:0;">* 교재의 Day 단위를 주간 투두로 등록하면 매일 자동으로 데일리 투두에 배치됩니다.</p>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <!-- ============ MATERIALS ============ -->
+            <sc-if value="{{ secMat }}" hint-placeholder-val="{{ false }}">
+              <div style="">
+                <div style="display:flex;width:100%;padding-top:32px;">
+                  <sc-for list="{{ matTabs }}" as="tb" hint-placeholder-count="2">
+                    <button onClick="{{ tb.go }}" style="{{ tb.style }}">{{ tb.label }}</button>
+                  </sc-for>
+                </div>
+
+                <div style="display:flex;align-items:center;gap:10px;border:1px solid #c6c6c6;border-radius:2px;padding:12px 14px;margin-top:28px;">
+                  <span style="width:16px;height:16px;flex:none;border:1.5px solid rgba(22,22,22,0.4);border-radius:50%;position:relative;"><span style="position:absolute;right:-4px;bottom:-3px;width:7px;height:1.5px;background:rgba(22,22,22,0.4);transform:rotate(45deg);"></span></span>
+                  <input placeholder="교재·시험지 · 태그 검색" style="flex:1;border:none;background:transparent;font-size:16px;line-height:28px;color:#161616;outline:none;">
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;padding:16px 0 4px;">
+                  <sc-for list="{{ tagChips }}" as="c" hint-placeholder-count="6">
+                    <button style="{{ c.style }}">{{ c.label }}</button>
+                  </sc-for>
+                </div>
+
+                <sc-if value="{{ matBookTab }}" hint-placeholder-val="{{ true }}">
+                  <div style="border-bottom:1px solid rgba(22,22,22,0.96);padding:28px 0 18px;display:flex;align-items:baseline;justify-content:space-between;">
+                    <p style="font-size:20px;line-height:32px;font-weight:600;color:#161616;margin:0;">교재</p>
+                    <button style="background:none;border:none;font-size:16px;line-height:28px;color:#161616;text-decoration:underline;text-underline-offset:3px;padding:0;">+ 교재 등록</button>
+                  </div>
+                  <sc-for list="{{ books }}" as="b" hint-placeholder-count="4">
+                    <div style="border-bottom:1px solid #16161614;padding:20px 0;">
+                      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">
+                        <div style="flex:1;min-width:0;">
+                          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                            <span style="{{ b.badgeStyle }}">{{ b.subject }}</span>
+                            <span style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.4);">{{ b.tags }}</span>
+                          </div>
+                          <p style="font-size:20px;line-height:32px;font-weight:400;color:#161616;margin:0 0 2px;">{{ b.title }}</p>
+                          <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0;">{{ b.pub }} · 연동 투두 {{ b.todos }}개</p>
+                        </div>
+                        <button style="flex:none;background:none;border:none;font-size:16px;line-height:28px;color:#161616;text-decoration:underline;text-underline-offset:3px;padding:0;">상세보기</button>
+                      </div>
+                    </div>
+                  </sc-for>
+                </sc-if>
+
+                <sc-if value="{{ matExamTab }}" hint-placeholder-val="{{ false }}">
+                  <div style="border-bottom:1px solid rgba(22,22,22,0.96);padding:28px 0 18px;display:flex;align-items:baseline;justify-content:space-between;">
+                    <p style="font-size:20px;line-height:32px;font-weight:600;color:#161616;margin:0;">시험지</p>
+                    <button style="background:none;border:none;font-size:16px;line-height:28px;color:#161616;text-decoration:underline;text-underline-offset:3px;padding:0;">+ 시험지 등록</button>
+                  </div>
+                  <sc-for list="{{ examPapers }}" as="b" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-bottom:1px solid #16161614;padding:20px 0;">
+                      <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                          <span style="{{ b.badgeStyle }}">{{ b.subject }}</span>
+                          <span style="{{ b.badgeStyle }}">{{ b.tag }}</span>
+                        </div>
+                        <p style="font-size:20px;line-height:32px;font-weight:400;color:#161616;margin:0 0 2px;">{{ b.title }}</p>
+                        <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0;">응시일 {{ b.date }}</p>
+                      </div>
+                      <button style="flex:none;background:none;border:none;font-size:16px;line-height:28px;color:#161616;text-decoration:underline;text-underline-offset:3px;padding:0;">상세보기</button>
+                    </div>
+                  </sc-for>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <!-- ============ CAMSTUDY ============ -->
+            <sc-if value="{{ secCam }}" hint-placeholder-val="{{ false }}">
+              <div style="">
+                <div style="display:flex;width:100%;padding-top:32px;">
+                  <sc-for list="{{ camTabs }}" as="tb" hint-placeholder-count="2">
+                    <button onClick="{{ tb.go }}" style="{{ tb.style }}">{{ tb.label }}</button>
+                  </sc-for>
+                </div>
+
+                <sc-if value="{{ camLiveTab }}" hint-placeholder-val="{{ true }}">
+                  <div style="margin-top:28px;position:relative;width:100%;aspect-ratio:16/9;background:repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4 10px,#efefef 10px,#efefef 20px);border:1px solid #16161614;display:flex;align-items:center;justify-content:center;">
+                    <sc-if value="{{ camDot }}" hint-placeholder-val="{{ false }}">
+                      <div style="position:absolute;top:14px;left:14px;display:flex;align-items:center;gap:7px;background:#161616;padding:5px 10px;border-radius:2px;">
+                        <span style="width:8px;height:8px;border-radius:50%;background:#fff;"></span>
+                        <span style="font-size:13px;line-height:18px;color:#fff;font-weight:500;">REC</span>
+                      </div>
+                    </sc-if>
+                    <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:rgba(22,22,22,0.4);">웹캠 미리보기</span>
+                    <p style="position:absolute;bottom:16px;left:0;right:0;text-align:center;font-family:ui-monospace,Menlo,monospace;font-size:44px;font-weight:300;letter-spacing:0.04em;color:#161616;margin:0;">{{ camTime }}</p>
+                  </div>
+
+                  <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);text-align:center;padding:14px 0 20px;margin:0;">{{ camStatusText }}</p>
+
+                  <p style="font-size:14px;line-height:24px;font-weight:600;color:#161616;margin:0 0 10px;">자동 촬영 간격</p>
+                  <div style="display:flex;width:100%;margin-bottom:20px;">
+                    <sc-for list="{{ intervalChips }}" as="c" hint-placeholder-count="4">
+                      <button onClick="{{ c.set }}" style="{{ c.style }}">{{ c.label }}</button>
+                    </sc-for>
+                  </div>
+                  <button onClick="{{ toggleCam }}" style="{{ camBtnStyle }}">{{ camBtnLabel }}</button>
+
+                  <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #16161614;margin-top:36px;">
+                    <div style="padding:20px 20px 0 0;">
+                      <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 4px;">오늘 학습시간</p>
+                      <p style="font-size:24px;line-height:32px;font-weight:300;color:#161616;margin:0;">{{ camTotalToday }}</p>
+                    </div>
+                    <div style="padding:20px 0 0 20px;border-left:1px solid #16161614;">
+                      <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 4px;">오늘 세션</p>
+                      <p style="font-size:24px;line-height:32px;font-weight:300;color:#161616;margin:0;">{{ camSessions }}</p>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ camTimelineTab }}" hint-placeholder-val="{{ false }}">
+                  <div style="border-bottom:1px solid rgba(22,22,22,0.96);padding:40px 0 20px;display:flex;align-items:baseline;justify-content:space-between;">
+                    <p style="font-size:20px;line-height:32px;font-weight:600;color:#161616;margin:0;">2026년 7월 1일 학습 인증</p>
+                    <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0;">{{ camTimelineCount }}회 · 총 {{ camTotalToday }}</p>
+                  </div>
+                  <div style="padding-top:12px;">
+                    <sc-for list="{{ timelineEntries }}" as="e" hint-placeholder-count="4">
+                      <div style="display:flex;gap:20px;">
+                        <div style="flex:none;width:64px;display:flex;flex-direction:column;align-items:center;padding-top:24px;">
+                          <span style="font-family:ui-monospace,Menlo,monospace;font-size:14px;color:#161616;">{{ e.time }}</span>
+                          <span style="width:10px;height:10px;border-radius:50%;background:#161616;margin-top:10px;"></span>
+                          <span style="flex:1;width:1px;background:#16161614;margin-top:6px;min-height:24px;"></span>
+                        </div>
+                        <div style="flex:1;min-width:0;padding:24px 0 28px;">
+                          <div style="border:1px solid #16161614;display:flex;">
+                            <div style="position:relative;flex:none;width:220px;aspect-ratio:4/3;background:repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4 9px,#efefef 9px,#efefef 18px);overflow:hidden;">
+                              <sc-if value="{{ e.hasMemo }}" hint-placeholder-val="{{ false }}">
+                                <img src="{{ e.memoUrl }}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;">
+                              </sc-if>
+                              <div style="position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:6px;background:#161616;padding:4px 9px;border-radius:2px;">
+                                <span style="width:12px;height:12px;border-radius:50%;border:1.5px solid #fff;display:inline-flex;align-items:center;justify-content:center;"><span style="width:4px;height:7px;border:1.5px solid #fff;border-top:none;border-left:none;transform:rotate(42deg) translate(-0.5px,-1px);"></span></span>
+                                <span style="font-size:11px;line-height:14px;color:#fff;font-weight:600;">인증됨</span>
+                              </div>
+                              <sc-if value="{{ e.hasMemo }}" hint-placeholder-val="{{ false }}">
+                                <span style="position:absolute;top:10px;right:10px;font-size:11px;line-height:14px;color:#161616;background:#fff;border:1px solid #16161614;padding:2px 7px;border-radius:2px;white-space:nowrap;">✎ 메모</span>
+                              </sc-if>
+                            </div>
+                            <div style="flex:1;min-width:0;padding:20px;display:flex;flex-direction:column;">
+                              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                                <span style="{{ e.badgeStyle }}">{{ e.subject }}</span>
+                                <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;color:rgba(22,22,22,0.5);">{{ e.time }}–{{ e.end }}</span>
+                                <span style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.45);">· {{ e.dur }} 집중</span>
+                              </div>
+                              <p style="font-size:18px;line-height:28px;color:#161616;margin:0 0 auto;">{{ e.title }}</p>
+                              <button onClick="{{ e.editMemo }}" style="align-self:flex-start;margin-top:16px;background:#fff;color:#161616;border:1px solid #161616;border-radius:2px;padding:9px 18px;font-size:14px;font-weight:500;">✎ {{ e.memoBtnLabel }}</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <!-- ============ GRADES ============ -->
+            <sc-if value="{{ secGrade }}" hint-placeholder-val="{{ false }}">
+              <div style="">
+                <sc-if value="{{ isParent }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding-top:32px;">
+                    <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 4px;">연동된 학생</p>
+                    <h2 style="font-size:28px;line-height:40px;font-weight:200;letter-spacing:-0.02em;color:#161616;margin:0 0 20px;">{{ userChildName }} · 고3 성적</h2>
+                  </div>
+                </sc-if>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;{{ gradeChipsPad }}">
+                  <sc-for list="{{ subjectChips }}" as="c" hint-placeholder-count="5">
+                    <button onClick="{{ c.pick }}" style="{{ c.style }}">{{ c.label }}</button>
+                  </sc-for>
+                </div>
+
+                <div style="border:1px solid #16161614;padding:28px;margin-top:20px;display:flex;gap:32px;align-items:center;">
+                  <div style="flex:none;padding-right:32px;border-right:1px solid #16161614;">
+                    <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 4px;">{{ gradeSubject }} 최근 등급</p>
+                    <div style="display:flex;align-items:flex-end;gap:8px;">
+                      <span style="font-size:56px;line-height:1;font-weight:200;letter-spacing:-0.02em;color:#161616;">{{ subjSummary.latest }}</span>
+                      <span style="font-size:16px;line-height:1;color:rgba(22,22,22,0.5);padding-bottom:6px;">등급</span>
+                    </div>
+                    <p style="font-size:14px;line-height:24px;color:#003ce0;margin:8px 0 0;">{{ subjSummary.deltaLabel }}</p>
+                    <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:2px 0 0;">최고 {{ subjSummary.best }}등급 · 기록 {{ subjSummary.count }}개</p>
+                  </div>
+                  <div data-om-raster="true" style="flex:1;min-width:0;">
+                    <svg viewBox="0 0 {{ subjTrend.W }} {{ subjTrend.H }}" style="width:100%;height:auto;display:block;overflow:visible;">
+                      <polyline points="{{ subjTrend.points }}" fill="none" stroke="#161616" stroke-width="1.5"></polyline>
+                      <sc-for list="{{ subjTrend.dots }}" as="d" hint-placeholder-count="3">
+                        <circle cx="{{ d.cx }}" cy="{{ d.cy }}" r="4" fill="#161616"></circle>
+                      </sc-for>
+                    </svg>
+                    <div style="display:flex;justify-content:space-between;padding:8px 40px 0;">
+                      <sc-for list="{{ subjTrend.dots }}" as="d" hint-placeholder-count="3">
+                        <span style="font-size:13px;line-height:20px;color:rgba(22,22,22,0.5);">{{ d.label }}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:center;gap:8px;padding:24px 0 4px;">
+                  <sc-for list="{{ typeChips }}" as="c" hint-placeholder-count="5">
+                    <button onClick="{{ c.pick }}" style="{{ c.style }}">{{ c.label }}</button>
+                  </sc-for>
+                </div>
+
+                <div style="border-bottom:1px solid rgba(22,22,22,0.96);padding:16px 0 16px;display:flex;align-items:baseline;justify-content:space-between;">
+                  <p style="font-size:20px;line-height:32px;font-weight:600;color:#161616;margin:0;">{{ gradeSubject }} 시험 {{ filteredCount }}개</p>
+                  <sc-if value="{{ isStudent }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ openRegister }}" style="background:none;border:none;font-size:16px;line-height:28px;color:#161616;text-decoration:underline;text-underline-offset:3px;padding:0;">+ 시험 등록</button>
+                  </sc-if>
+                </div>
+
+                <sc-for list="{{ filteredExams }}" as="e" hint-placeholder-count="3">
+                  <button onClick="{{ e.open }}" style="display:flex;width:100%;align-items:center;gap:20px;background:#fff;border:none;border-bottom:1px solid #16161614;padding:22px 0;text-align:left;">
+                    <div style="flex:1;min-width:0;">
+                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                        <span style="{{ e.badgeStyle }}">{{ e.type }}</span>
+                        <span style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);">{{ e.date }}</span>
+                      </div>
+                      <p style="font-size:20px;line-height:32px;color:#161616;margin:0;">{{ e.name }}</p>
+                    </div>
+                    <div style="flex:none;text-align:right;padding-right:8px;">
+                      <p style="font-size:14px;line-height:20px;color:rgba(22,22,22,0.5);margin:0;">백분위</p>
+                      <p style="font-size:20px;line-height:26px;font-weight:300;color:#161616;margin:0;">{{ e.pct }}</p>
+                    </div>
+                    <div style="flex:none;text-align:right;width:96px;">
+                      <p style="font-size:32px;line-height:36px;font-weight:200;color:#161616;margin:0;">{{ e.gradeNum }}<span style="font-size:14px;color:rgba(22,22,22,0.5);"> 등급</span></p>
+                      <p style="font-size:14px;line-height:20px;color:rgba(22,22,22,0.5);margin:0;">원점수 {{ e.raw }}</p>
+                    </div>
+                    <span style="flex:none;font-size:16px;color:rgba(22,22,22,0.3);">→</span>
+                  </button>
+                </sc-for>
+                <sc-if value="{{ filteredEmpty }}" hint-placeholder-val="{{ false }}">
+                  <p style="font-size:16px;line-height:28px;color:rgba(22,22,22,0.4);text-align:center;padding:48px 0;margin:0;">해당 종류의 시험 기록이 없습니다. ‘+ 시험 등록’으로 추가하세요.</p>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <!-- ============ SETTINGS ============ -->
+            <sc-if value="{{ secSet }}" hint-placeholder-val="{{ false }}">
+              <div style="">
+                <div style="border-bottom:1px solid rgba(22,22,22,0.96);padding:40px 0 20px;">
+                  <p style="font-size:20px;line-height:32px;font-weight:600;color:#161616;margin:0;">알림 설정</p>
+                </div>
+                <sc-for list="{{ notifRows }}" as="n" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid #16161614;padding:20px 0;">
+                    <div style="flex:1;min-width:0;">
+                      <p style="font-size:16px;line-height:28px;font-weight:400;color:#161616;margin:0;">{{ n.label }}</p>
+                      <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0;">{{ n.desc }}</p>
+                    </div>
+                    <button onClick="{{ n.toggle }}" style="{{ n.trackStyle }}border:none;padding:0;"><span style="{{ n.knobStyle }}"></span></button>
+                  </div>
+                </sc-for>
+
+                <div style="border-bottom:1px solid rgba(22,22,22,0.96);padding:44px 0 20px;">
+                  <p style="font-size:20px;line-height:32px;font-weight:600;color:#161616;margin:0;">크로스 플랫폼 · 학부모 연동</p>
+                </div>
+                <div style="border-bottom:1px solid #16161614;padding:20px 0;">
+                  <p style="font-size:16px;line-height:28px;font-weight:400;color:#161616;margin:0 0 2px;">인증코드</p>
+                  <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 12px;">이 코드를 학부모 앱에 입력하면 학습 현황이 연동됩니다.</p>
+                  <div style="display:flex;align-items:center;gap:12px;background:#f4f4f4;padding:14px 16px;">
+                    <span style="flex:1;font-family:ui-monospace,Menlo,monospace;font-size:20px;letter-spacing:0.08em;color:#161616;">{{ authCode }}</span>
+                    <button style="background:none;border:none;font-size:14px;line-height:24px;color:#002a9e;text-decoration:underline;text-underline-offset:3px;padding:0;">복사</button>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #16161614;padding:20px 0;">
+                  <p style="font-size:16px;line-height:28px;color:#161616;margin:0;">계정 · 프로필 설정</p>
+                  <span style="font-size:16px;color:rgba(22,22,22,0.3);">→</span>
+                </div>
+                <div style="padding-top:28px;">
+                  <button onClick="{{ logout }}" style="background:none;border:none;padding:0;font-size:16px;line-height:28px;color:rgba(22,22,22,0.5);text-decoration:underline;text-underline-offset:3px;">로그아웃</button>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- ============ PARENT HOME ============ -->
+            <sc-if value="{{ secParentHome }}" hint-placeholder-val="{{ false }}">
+              <div style="">
+                <div style="padding-top:32px;">
+                  <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 4px;">연동된 학생</p>
+                  <h2 style="font-size:28px;line-height:40px;font-weight:200;letter-spacing:-0.02em;color:#161616;margin:0;">{{ childName }} · 고3</h2>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #16161614;margin-top:28px;">
+                  <sc-for list="{{ parentStats }}" as="p" hint-placeholder-count="4">
+                    <div style="padding:20px 20px 20px 0;border-bottom:1px solid #16161614;">
+                      <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 4px;">{{ p.label }}</p>
+                      <p style="font-size:24px;line-height:32px;font-weight:300;color:#161616;margin:0;">{{ p.value }}</p>
+                    </div>
+                  </sc-for>
+                </div>
+
+                <div style="border-bottom:1px solid rgba(22,22,22,0.96);padding:44px 0 20px;display:flex;align-items:baseline;justify-content:space-between;">
+                  <p style="font-size:20px;line-height:32px;font-weight:600;color:#161616;margin:0;">오늘 완료 인증</p>
+                  <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0;">캠스터디 · 투두 사진</p>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding-top:24px;">
+                  <sc-for list="{{ timelineEntries }}" as="e" hint-placeholder-count="6">
+                    <div style="border:1px solid #16161614;">
+                      <div style="position:relative;width:100%;aspect-ratio:4/3;background:repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4 8px,#efefef 8px,#efefef 16px);overflow:hidden;">
+                        <sc-if value="{{ e.hasMemo }}" hint-placeholder-val="{{ false }}">
+                          <img src="{{ e.memoUrl }}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;">
+                        </sc-if>
+                        <span style="position:absolute;bottom:8px;right:8px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:rgba(22,22,22,0.55);background:rgba(255,255,255,0.7);padding:1px 6px;">{{ e.time }}</span>
+                      </div>
+                      <div style="padding:10px 12px;">
+                        <span style="{{ e.badgeStyle }}">{{ e.subject }}</span>
+                        <p style="font-size:13px;line-height:20px;color:rgba(22,22,22,0.6);margin:6px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ e.title }}</p>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+
+            <!-- ============ PARENT LINK ============ -->
+            <sc-if value="{{ secLink }}" hint-placeholder-val="{{ false }}">
+              <div style="max-width:440px;padding-top:40px;">
+                <h2 style="font-size:28px;line-height:40px;font-weight:200;letter-spacing:-0.02em;color:#161616;margin:0 0 8px;">자녀 계정 연동</h2>
+                <p style="font-size:16px;line-height:28px;color:rgba(22,22,22,0.5);margin:0 0 32px;">학생 앱 설정에서 발급된 인증코드를 입력하세요.</p>
+                <input placeholder="ENE-0000-XX" style="width:100%;border:none;border-bottom:1px solid rgba(22,22,22,0.5);background:transparent;padding:14px 0;font-family:ui-monospace,Menlo,monospace;font-size:22px;letter-spacing:0.08em;color:#161616;outline:none;margin-bottom:24px;">
+                <button onClick="{{ goParentHome }}" style="width:100%;background:#161616;color:#fff;border:none;border-radius:2px;padding:16px 0;font-size:16px;line-height:28px;font-weight:600;">연동하기</button>
+                <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);padding-top:20px;margin:0;">* 연동 시 학생의 완료율, 학습시간, 성적 추이, 완료 인증 사진을 조회할 수 있습니다. 개인 메모는 공유되지 않습니다.</p>
+              </div>
+            </sc-if>
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- EXAM DETAIL MODAL -->
+    <sc-if value="{{ detailOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="position:fixed;inset:0;z-index:80;background:rgba(22,22,22,0.4);display:flex;align-items:center;justify-content:center;padding:40px;">
+        <button onClick="{{ closeDetail }}" style="position:absolute;inset:0;background:none;border:none;"></button>
+        <div style="position:relative;background:#fff;width:100%;max-width:640px;max-height:86%;overflow-y:auto;padding:40px;" class="sh">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="{{ detail.badgeStyle }}">{{ detail.subject }}</span>
+                <span style="{{ detail.badgeStyle }}">{{ detail.type }}</span>
+                <span style="font-size:14px;color:rgba(22,22,22,0.5);">{{ detail.date }}</span>
+              </div>
+              <h2 style="font-size:26px;line-height:38px;font-weight:400;color:#161616;margin:12px 0 0;">{{ detail.name }}</h2>
+            </div>
+            <button onClick="{{ closeDetail }}" style="flex:none;background:none;border:none;font-size:24px;line-height:1;color:rgba(22,22,22,0.4);padding:0;">×</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;border-top:1px solid #16161614;margin-top:24px;">
+            <div style="padding:20px 20px 20px 0;">
+              <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 4px;">등급</p>
+              <p style="font-size:30px;line-height:36px;font-weight:300;color:#161616;margin:0;">{{ detail.grade }}</p>
+            </div>
+            <div style="padding:20px;border-left:1px solid #16161614;">
+              <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 4px;">원점수</p>
+              <p style="font-size:30px;line-height:36px;font-weight:300;color:#161616;margin:0;">{{ detail.raw }}</p>
+            </div>
+            <div style="padding:20px;border-left:1px solid #16161614;">
+              <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 4px;">백분위</p>
+              <p style="font-size:30px;line-height:36px;font-weight:300;color:#161616;margin:0;">{{ detail.pct }}</p>
+            </div>
+            <div style="padding:20px 0 20px 20px;border-left:1px solid #16161614;">
+              <p style="font-size:14px;line-height:24px;color:rgba(22,22,22,0.5);margin:0 0 4px;">표준점수</p>
+              <p style="font-size:30px;line-height:36px;font-weight:300;color:#161616;margin:0;">{{ detail.std }}</p>
+            </div>
+          </div>
+
+          <div style="border-bottom:1px solid rgba(22,22,22,0.96);padding:32px 0 14px;">
+            <p style="font-size:18px;line-height:28px;font-weight:600;color:#161616;margin:0;">틀린 문항 <span style="color:rgba(22,22,22,0.4);font-weight:400;">{{ detail.wrongCount }}</span></p>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;padding:16px 0 4px;">
+            <sc-for list="{{ detail.wrongChips }}" as="w" hint-placeholder-count="3">
+              <span style="{{ w.style }}">{{ w.label }}</span>
+            </sc-for>
+          </div>
+
+          <div style="border-bottom:1px solid rgba(22,22,22,0.96);padding:32px 0 14px;">
+            <p style="font-size:18px;line-height:28px;font-weight:600;color:#161616;margin:0;">복기 메모</p>
+          </div>
+          <sc-if value="{{ detail.hasMemo }}" hint-placeholder-val="{{ true }}">
+            <p style="font-size:16px;line-height:28px;color:#393939;background:#f4f4f4;padding:18px 20px;margin:16px 0 0;">{{ detail.memo }}</p>
+          </sc-if>
+          <sc-if value="{{ detail.hasMemo }}" hint-placeholder-val="{{ false }}">
+            <p style="font-size:16px;line-height:28px;color:rgba(22,22,22,0.4);padding:18px 0;margin:0;">작성된 복기 메모가 없습니다.</p>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- EXAM REGISTER MODAL -->
+    <sc-if value="{{ registerOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="position:fixed;inset:0;z-index:80;background:rgba(22,22,22,0.4);display:flex;align-items:center;justify-content:center;padding:40px;">
+        <button onClick="{{ closeRegister }}" style="position:absolute;inset:0;background:none;border:none;"></button>
+        <div style="position:relative;background:#fff;width:100%;max-width:560px;max-height:86%;overflow-y:auto;padding:40px;" class="sh">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+            <div>
+              <h2 style="font-size:26px;line-height:38px;font-weight:400;color:#161616;margin:0 0 4px;">시험 등록</h2>
+              <p style="font-size:16px;line-height:28px;color:rgba(22,22,22,0.5);margin:0;"><span style="font-weight:600;color:#161616;">{{ gradeSubject }}</span> 과목에 새 시험 기록을 추가합니다.</p>
+            </div>
+            <button onClick="{{ closeRegister }}" style="flex:none;background:none;border:none;font-size:24px;line-height:1;color:rgba(22,22,22,0.4);padding:0;">×</button>
+          </div>
+
+          <p style="font-size:14px;line-height:24px;font-weight:600;color:#161616;margin:28px 0 10px;">시험 종류</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px;">
+            <sc-for list="{{ registerTypeChips }}" as="c" hint-placeholder-count="5">
+              <button onClick="{{ c.pick }}" style="{{ c.style }}">{{ c.label }}</button>
+            </sc-for>
+          </div>
+
+          <p style="font-size:14px;line-height:24px;font-weight:600;color:#161616;margin:0 0 10px;">시험 이름</p>
+          <input placeholder="예) 2026학년도 6월 모의평가" style="width:100%;border:none;border-bottom:1px solid rgba(22,22,22,0.5);background:transparent;padding:12px 0;font-size:16px;color:#161616;outline:none;margin-bottom:24px;">
+
+          <div style="display:flex;gap:20px;margin-bottom:24px;">
+            <div style="flex:1;">
+              <p style="font-size:14px;line-height:24px;font-weight:600;color:#161616;margin:0 0 10px;">응시일</p>
+              <input placeholder="26.07.10" style="width:100%;border:none;border-bottom:1px solid rgba(22,22,22,0.5);background:transparent;padding:12px 0;font-size:16px;color:#161616;outline:none;">
+            </div>
+            <div style="flex:1;">
+              <p style="font-size:14px;line-height:24px;font-weight:600;color:#161616;margin:0 0 10px;">등급</p>
+              <input placeholder="2" style="width:100%;border:none;border-bottom:1px solid rgba(22,22,22,0.5);background:transparent;padding:12px 0;font-size:16px;color:#161616;outline:none;">
+            </div>
+          </div>
+
+          <div style="display:flex;gap:20px;">
+            <div style="flex:1;">
+              <p style="font-size:14px;line-height:24px;font-weight:600;color:#161616;margin:0 0 10px;">원점수</p>
+              <input placeholder="88" style="width:100%;border:none;border-bottom:1px solid rgba(22,22,22,0.5);background:transparent;padding:12px 0;font-size:16px;color:#161616;outline:none;">
+            </div>
+            <div style="flex:1;">
+              <p style="font-size:14px;line-height:24px;font-weight:600;color:#161616;margin:0 0 10px;">백분위 <span style="color:rgba(22,22,22,0.4);font-weight:400;">선택</span></p>
+              <input placeholder="89" style="width:100%;border:none;border-bottom:1px solid rgba(22,22,22,0.5);background:transparent;padding:12px 0;font-size:16px;color:#161616;outline:none;">
+            </div>
+            <div style="flex:1;">
+              <p style="font-size:14px;line-height:24px;font-weight:600;color:#161616;margin:0 0 10px;">표준점수 <span style="color:rgba(22,22,22,0.4);font-weight:400;">선택</span></p>
+              <input placeholder="130" style="width:100%;border:none;border-bottom:1px solid rgba(22,22,22,0.5);background:transparent;padding:12px 0;font-size:16px;color:#161616;outline:none;">
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;margin-top:36px;">
+            <button onClick="{{ closeRegister }}" style="flex:none;width:120px;background:#fff;color:#161616;border:1px solid #161616;border-radius:2px;padding:15px 0;font-size:16px;font-weight:500;">취소</button>
+            <button onClick="{{ closeRegister }}" style="flex:1;background:#161616;color:#fff;border:none;border-radius:2px;padding:15px 0;font-size:16px;font-weight:600;">등록하기</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- HANDWRITING MEMO MODAL -->
+    <sc-if value="{{ memoOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="position:fixed;inset:0;z-index:90;background:rgba(22,22,22,0.55);display:flex;align-items:center;justify-content:center;padding:40px;">
+        <button onClick="{{ closeMemo }}" style="position:absolute;inset:0;background:none;border:none;"></button>
+        <div style="position:relative;background:#fff;width:100%;max-width:620px;max-height:90%;overflow-y:auto;padding:32px;" class="sh">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="{{ memoEntry.badgeStyle }}">{{ memoEntry.subject }}</span>
+                <span style="font-size:14px;color:rgba(22,22,22,0.5);">{{ memoEntry.time }} 캡처</span>
+              </div>
+              <p style="font-size:18px;line-height:28px;color:#161616;margin:10px 0 0;">{{ memoEntry.title }}</p>
+            </div>
+            <button onClick="{{ closeMemo }}" style="flex:none;background:none;border:none;font-size:24px;line-height:1;color:rgba(22,22,22,0.4);padding:0;">×</button>
+          </div>
+
+          <div style="position:relative;width:100%;aspect-ratio:4/3;background:repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4 10px,#efefef 10px,#efefef 20px);border:1px solid #161616;touch-action:none;overflow:hidden;">
+            <span style="position:absolute;top:12px;left:14px;font-size:13px;color:rgba(22,22,22,0.4);pointer-events:none;">캡처 화면 위에 손글씨로 메모하세요</span>
+            <canvas id="ene-memo-canvas-pc" style="position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair;"></canvas>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 0 4px;">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <span style="font-size:14px;color:rgba(22,22,22,0.5);">펜</span>
+              <sc-for list="{{ penSwatches }}" as="p" hint-placeholder-count="3">
+                <button onClick="{{ p.pick }}" style="{{ p.style }}"></button>
+              </sc-for>
+            </div>
+            <button onClick="{{ clearCanvas }}" style="background:none;border:none;font-size:14px;color:rgba(22,22,22,0.5);text-decoration:underline;text-underline-offset:3px;padding:0;">전체 지우기</button>
+          </div>
+
+          <div style="display:flex;gap:12px;margin-top:20px;">
+            <sc-if value="{{ memoEntry.hasSaved }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ deleteMemo }}" style="flex:none;width:100px;background:#fff;color:#161616;border:1px solid #c6c6c6;border-radius:2px;padding:14px 0;font-size:15px;font-weight:500;">삭제</button>
+            </sc-if>
+            <button onClick="{{ closeMemo }}" style="flex:none;width:100px;background:#fff;color:#161616;border:1px solid #161616;border-radius:2px;padding:14px 0;font-size:15px;font-weight:500;">취소</button>
+            <button onClick="{{ saveMemo }}" style="flex:1;background:#161616;color:#fff;border:none;border-radius:2px;padding:14px 0;font-size:16px;font-weight:600;">메모 저장</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  state = {
+    view: 'auth', authStep: 'landing', authMode: 'login', role: 'student',
+    phone:'', studentCode:'', agree:false, verifyStatus:'ready',
+    section: 'dashboard',
+    tabs: { dashboard:'home', todo:'daily', materials:'book', camstudy:'live', grades:'exam' },
+    dashVar: 1,
+    camRunning: false, camSeconds: 0,
+    camInterval: 10,
+    todos: null,
+    notif: { todo:true, exam:true, cam:false },
+    search: '',
+    memoEditId:null, penColor:'#e0362f', memos:{},
+    gradeSubject:'국어', examType:'전체', examDetailId:null,
+    registerOpen:false, registerType:'모평',
+  };
+
+  examSubjects(){ return ['국어','수학','영어','생명과학1','지구과학1']; }
+  examData(){
+    return {
+      '국어':[
+        {id:'k1',type:'모평',name:'2026학년도 6월 모의평가',date:'26.06.04',raw:94,grade:2,pct:92,std:128,wrong:['독서 14','독서 17','문학 27'],memo:'독서 경제 지문 2문항, 문학 현대시 1문항 실수. 독서에서 시간 8분 초과 — 지문당 시간 관리 필요.'},
+        {id:'k2',type:'학평',name:'2026년 4월 전국연합학력평가',date:'26.04.10',raw:86,grade:3,pct:84,std:122,wrong:['화작 04','독서 22','독서 29','문학 33'],memo:'화법과작문 기본 실수. 비문학 어휘 정리장 만들기.'},
+        {id:'k3',type:'학평',name:'2026년 3월 전국연합학력평가',date:'26.03.26',raw:83,grade:3,pct:80,std:120,wrong:['독서 19','독서 21','문학 26','문학 31','언매 38'],memo:''},
+        {id:'k4',type:'내신',name:'1학기 중간고사',date:'26.04.28',raw:91,grade:2,pct:null,std:null,wrong:['서술형 3'],memo:'교과서 지문 위주. 서술형 부분점수 감점.'},
+      ],
+      '수학':[
+        {id:'m1',type:'모평',name:'2026학년도 6월 모의평가',date:'26.06.04',raw:88,grade:2,pct:89,std:130,wrong:['22','29','30'],memo:'미적분 30번 킬러 시간 부족. 22번 준킬러 계산 실수 — 검산 습관.'},
+        {id:'m2',type:'학평',name:'2026년 4월 전국연합학력평가',date:'26.04.10',raw:84,grade:2,pct:85,std:127,wrong:['20','28','30'],memo:'확통 선택 2문항 실수.'},
+        {id:'m3',type:'학평',name:'2026년 3월 전국연합학력평가',date:'26.03.26',raw:76,grade:3,pct:72,std:118,wrong:['15','21','22','29','30'],memo:''},
+      ],
+      '영어':[
+        {id:'e1',type:'모평',name:'2026학년도 6월 모의평가',date:'26.06.04',raw:92,grade:1,pct:null,std:null,wrong:['34','37'],memo:'절대평가 1등급. 빈칸 34번 어휘 부족.'},
+        {id:'e2',type:'학평',name:'2026년 4월 전국연합학력평가',date:'26.04.10',raw:89,grade:2,pct:null,std:null,wrong:['37','39'],memo:'순서·삽입 유형 2문항 실수.'},
+        {id:'e3',type:'학평',name:'2026년 3월 전국연합학력평가',date:'26.03.26',raw:88,grade:2,pct:null,std:null,wrong:['33','38','42'],memo:''},
+      ],
+      '생명과학1':[
+        {id:'b1',type:'모평',name:'2026학년도 6월 모의평가',date:'26.06.04',raw:42,grade:3,pct:78,std:63,wrong:['12','17','19'],memo:'유전 19번 가계도 실수. 막전위 개념 재정리.'},
+        {id:'b2',type:'사설',name:'이감 모의고사 3회',date:'26.05.20',raw:40,grade:3,pct:74,std:61,wrong:['11','14','19','20'],memo:''},
+      ],
+      '지구과학1':[
+        {id:'p1',type:'모평',name:'2026학년도 6월 모의평가',date:'26.06.04',raw:44,grade:2,pct:82,std:65,wrong:['16','18'],memo:'천체 18번, 판구조론 자료해석 실수.'},
+      ],
+    };
+  }
+  buildSubjectTrend(subject){
+    const ex=(this.examData()[subject]||[]).filter(e=>e.type==='모평'||e.type==='학평');
+    const sorted=[...ex].sort((a,b)=>a.date.localeCompare(b.date));
+    const W=620,H=160,padX=40,padTop=24,padBot=24,n=sorted.length;
+    const x=i=> padX+(n<=1?(W-2*padX)/2:i*(W-2*padX)/(n-1));
+    const y=g=> padTop+(g-1)/8*(H-padTop-padBot);
+    return {W,H,
+      points:sorted.map((e,i)=>x(i).toFixed(1)+','+y(e.grade).toFixed(1)).join(' '),
+      dots:sorted.map((e,i)=>({cx:x(i).toFixed(1),cy:y(e.grade).toFixed(1),label:e.date.slice(3),val:e.grade+'등급'})) };
+  }
+
+  SUBJECTS = ['국어','수학','영어','생명과학1','지구과학1'];
+
+  fmtPhone(v){ const d=(v||'').replace(/\D/g,'').slice(0,11); if(d.length<4)return d; if(d.length<8)return d.slice(0,3)+'-'+d.slice(3); return d.slice(0,3)+'-'+d.slice(3,7)+'-'+d.slice(7); }
+  phoneValid(){ return this.state.phone.replace(/\D/g,'').length===11; }
+  canProceed(){ const s=this.state; if(!this.phoneValid())return false; if(s.authMode==='signup'){ if(!s.agree)return false; if(s.role==='parent' && !s.studentCode.trim())return false; } return true; }
+
+  componentDidMount(){
+    this._t = setInterval(()=>{ if(this.state.camRunning) this.setState(s=>({camSeconds:s.camSeconds+1})); }, 1000);
+  }
+  componentWillUnmount(){ clearInterval(this._t); }
+  componentDidUpdate(prevProps, prevState){
+    if(this.state.memoEditId && !this._canvasReady){
+      const node=document.getElementById('ene-memo-canvas-pc');
+      if(node){ this._canvasReady=true; this._setupCanvas(node); }
+    }
+    if(!this.state.memoEditId && this._canvasReady){ this._canvasReady=false; }
+
+    const showQr = this.state.view==='auth' && this.state.authStep==='verify' && this.state.verifyStatus==='ready';
+    if(showQr && !this._qrDrawn){
+      const el=document.getElementById('octomo-qr');
+      if(el && window.QRCode){
+        el.innerHTML='';
+        try{
+          new QRCode(el, { text:'SMSTO:16663538:OCTOMO 인증 ENE-4821', width:160, height:160, colorDark:'#161616', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.M });
+          this._qrDrawn=true;
+        }catch(e){}
+      }
+    }
+    if(!showQr && this._qrDrawn){ this._qrDrawn=false; }
+  }
+
+  timelineData(){
+    return [
+      {id:'c1', time:'09:12', end:'09:52', dur:'40분', subject:'국어', title:'Day 03 · 독서 지문 2개 분석'},
+      {id:'c2', time:'10:05', end:'10:48', dur:'43분', subject:'수학', title:'삼각함수 유형 12~24번'},
+      {id:'c3', time:'11:10', end:'11:35', dur:'25분', subject:'영어', title:'3강 어법·어휘 40문항'},
+      {id:'c4', time:'13:20', end:'14:16', dur:'56분', subject:'생명과학1', title:'유전 3단원 오답 정리'},
+      {id:'c5', time:'14:40', end:'15:00', dur:'20분', subject:'국어', title:'문학 갈래 복합 1세트'},
+    ];
+  }
+  _setupCanvas(node){
+    if(!node) return;
+    this._canvas = node;
+    const size = ()=>{
+      const rect = node.getBoundingClientRect();
+      if(rect.width===0){ setTimeout(size, 30); return; }
+      const dpr = window.devicePixelRatio||1;
+      node.width = Math.round(rect.width*dpr);
+      node.height = Math.round(rect.height*dpr);
+      const ctx = node.getContext('2d');
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      ctx.lineCap='round'; ctx.lineJoin='round';
+      this._ctx = ctx; this._cw = rect.width; this._ch = rect.height;
+      const prev = this.state.memos[this.state.memoEditId];
+      if(prev){ const img=new Image(); img.onload=()=>ctx.drawImage(img,0,0,rect.width,rect.height); img.src=prev; }
+    };
+    size();
+    const rel = (e)=>{ const r=node.getBoundingClientRect(); const t=(e.touches&&e.touches[0])||e; return {x:t.clientX-r.left, y:t.clientY-r.top}; };
+    let drawing=false, last=null;
+    node.onpointerdown = (e)=>{ e.preventDefault(); if(!this._ctx) return; drawing=true; last=rel(e); try{node.setPointerCapture(e.pointerId);}catch(_){}; };
+    node.onpointermove = (e)=>{ if(!drawing||!this._ctx) return; const p=rel(e); const ctx=this._ctx; ctx.strokeStyle=this.state.penColor; ctx.lineWidth=3.2; ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke(); last=p; this._hasStrokes=true; };
+    node.onpointerup = ()=>{ drawing=false; };
+    node.onpointercancel = ()=>{ drawing=false; };
+  }
+  _clearCanvas(){ if(this._ctx&&this._cw){ this._ctx.clearRect(0,0,this._cw,this._ch); this._hasStrokes=false; } }
+  _saveMemo(){
+    const id=this.state.memoEditId;
+    const url = this._canvas ? this._canvas.toDataURL('image/png') : null;
+    this.setState(st=>({ memos:{...st.memos, [id]: url}, memoEditId:null }));
+    this._ctx=null; this._canvas=null;
+  }
+  _deleteMemo(){
+    const id=this.state.memoEditId;
+    this.setState(st=>{ const m={...st.memos}; delete m[id]; return {memos:m, memoEditId:null}; });
+    this._ctx=null; this._canvas=null;
+  }
+
+  defaultTodos(){
+    return [
+      {id:'t1', subject:'국어', material:'유신T 시즌3 집중탐구영역', title:'Day 03 · 독서 지문 2개 분석', done:true},
+      {id:'t2', subject:'수학', material:'쎈 수학1', title:'삼각함수 유형 12~24번', done:true},
+      {id:'t3', subject:'영어', material:'능률 EBS 수능특강 변형', title:'3강 어법·어휘 40문항', done:false},
+      {id:'t4', subject:'생명과학1', material:'마더텅 기출 생명과학1', title:'유전 3단원 오답 정리', done:false},
+      {id:'t5', subject:'국어', material:'하루 3지문 실전', title:'문학 갈래 복합 1세트', done:false},
+    ];
+  }
+
+  todos(){ return this.state.todos || this.defaultTodos(); }
+
+  dday(){
+    const target = new Date(2026,10,19);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.max(0, Math.ceil((target - today)/86400000));
+  }
+
+  fmtTime(s){
+    const h=Math.floor(s/3600), m=Math.floor(s%3600/60), sec=s%60;
+    const p=(n)=>String(n).padStart(2,'0');
+    return p(h)+':'+p(m)+':'+p(sec);
+  }
+
+  menuStyle(active){
+    return 'display:block;width:100%;text-align:left;background:none;border:none;padding:2px 0;margin-bottom:2px;font-size:32px;line-height:48px;font-weight:200;letter-spacing:-0.01em;'
+      + (active
+        ? 'color:#161616;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;'
+        : 'color:rgba(22,22,22,0.3);text-decoration:none;');
+  }
+
+  tabStyle(active, first){
+    return 'position:relative;flex:1;border:1px solid #16161614;padding:18px 0;font-size:16px;line-height:28px;font-weight:400;text-align:center;'
+      + (active ? 'background:#fff;color:#161616;z-index:10;' : 'background:#f4f4f4;color:rgba(22,22,22,0.5);opacity:.9;')
+      + (first ? '' : 'margin-left:-1px;');
+  }
+  badge(){
+    return 'display:inline-block;border-radius:2px;border:1px solid #c6c6c6;background:#f4f4f4;padding:0 6px;font-size:14px;line-height:24px;font-weight:600;color:#393939;white-space:nowrap;';
+  }
+  makeTabs(section, defs){
+    const cur = this.state.tabs[section];
+    return defs.map(([id,label],i)=>({
+      key:id, label,
+      style:this.tabStyle(cur===id, i===0),
+      go:()=> this.setState(st=>({tabs:{...st.tabs, [section]:id}})),
+    }));
+  }
+  quotes(){
+    return [
+      {t:'오늘 걷지 않으면 내일은 뛰어야 한다.', a:'토마스 홉스'},
+      {t:'포기하지 않는 한 실패는 없다.', a:'토머스 에디슨'},
+      {t:'가장 느리게 가는 사람도 목표를 잃지 않으면 빨리 가는 사람보다 앞선다.', a:'레싱'},
+      {t:'노력은 배신하지 않는다. 다만 시간이 걸릴 뿐이다.', a:'—'},
+    ];
+  }
+  todayQuote(){ const q=this.quotes(); const d=Math.floor(Date.now()/86400000)%q.length; return q[d]; }
+
+  renderVals(){
+    const s = this.state;
+    const isParent = s.role === 'parent';
+    const setSection = (id)=> this.setState({section:id});
+    const menuItems = isParent
+      ? [['home','현황'],['grades','성적'],['link','연동'],['settings','설정']]
+      : [['dashboard','대시보드'],['todo','투두'],['materials','학습자료'],['camstudy','캠스터디'],['grades','성적'],['settings','설정']];
+    const menu = menuItems.map(([id,label])=>({
+      key:id, label,
+      style:this.menuStyle(s.section===id),
+      go:()=>setSection(id),
+    }));
+
+    const td = this.todos();
+    const doneCount = td.filter(t=>t.done).length;
+
+    return {
+      showAuth: s.view==='auth',
+      showApp: s.view==='app',
+      // auth
+      authLanding: s.authStep==='landing',
+      authLoginStep: s.authStep==='login',
+      authSignupRole: s.authStep==='signupRole',
+      authSignupStep: s.authStep==='signup',
+      authVerify: s.authStep==='verify',
+      roleLabel: s.role==='parent'?'학부모':'학생',
+      isParentSignup: s.role==='parent',
+      phone:s.phone, studentCode:s.studentCode,
+      onPhone:(e)=>this.setState({phone:this.fmtPhone(e.target.value)}),
+      onCode:(e)=>this.setState({studentCode:e.target.value.toUpperCase()}),
+      toggleAgree:()=>this.setState(st=>({agree:!st.agree})),
+      agreeBox:'width:24px;height:24px;flex:none;border-radius:2px;border:1px solid '+(s.agree?'#161616':'#c6c6c6')+';background:'+(s.agree?'#161616':'#fff')+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;',
+      agreeCheck:s.agree?'✓':'',
+      proceedEnabled:this.canProceed(),
+      proceedStyle:'width:100%;border:none;border-radius:2px;padding:17px 0;font-size:16px;font-weight:600;'+(this.canProceed()?'background:#161616;color:#fff;':'background:#e2e2e2;color:#fff;pointer-events:none;'),
+      goLogin:()=>this.setState({authStep:'login',authMode:'login',phone:'',verifyStatus:'ready'}),
+      goSignupRole:()=>this.setState({authStep:'signupRole',authMode:'signup'}),
+      pickStudent:()=>this.setState({role:'student',authStep:'signup',phone:'',studentCode:'',agree:false,verifyStatus:'ready'}),
+      pickParent:()=>this.setState({role:'parent',authStep:'signup',phone:'',studentCode:'',agree:false,verifyStatus:'ready'}),
+      backLanding:()=>{ clearTimeout(this._vt); clearTimeout(this._vt2); this.setState({authStep:'landing',verifyStatus:'ready'}); },
+      backRole:()=>this.setState({authStep:'signupRole'}),
+      startVerify:()=>{ if(!this.canProceed()) return; this.setState({authStep:'verify',verifyStatus:'ready'}); },
+      sendSms:()=>{ this.setState({verifyStatus:'checking'}); clearTimeout(this._vt); this._vt=setTimeout(()=>{ this.setState({verifyStatus:'done'}); this._vt2=setTimeout(()=>this.setState({view:'app',section:this.state.role==='parent'?'home':'dashboard'}),1200); },2600); },
+      verifyReady:s.verifyStatus==='ready', verifyChecking:s.verifyStatus==='checking', verifyDone:s.verifyStatus==='done',
+      verifyPhoneLabel:s.phone||'—',
+      octoNumber:'1666-3538', octoCode:'ENE-4821',
+      smsHref:'sms:16663538?&body='+encodeURIComponent('OCTOMO 인증 ENE-4821'),
+      enterApp: ()=> this.setState({view:'app', section: s.role==='parent'?'home':'dashboard'}),
+      // header
+      userName: isParent ? '이현주' : '김민준',
+      userSchool: isParent ? '학부모' : '고3',
+      studentTabBg: !isParent?'#161616':'#fff', studentTabColor: !isParent?'#fff':'rgba(22,22,22,0.5)',
+      parentTabBg: isParent?'#161616':'#fff', parentTabColor: isParent?'#fff':'rgba(22,22,22,0.5)',
+      toStudent: ()=> this.setState({role:'student', section:'dashboard'}),
+      toParent: ()=> this.setState({role:'parent', section:'home'}),
+      goSettings: ()=> this.setState({section:'settings'}),
+      logout: ()=> this.setState({view:'auth', authStep:'landing', phone:'', studentCode:'', agree:false, verifyStatus:'ready'}),
+      goLink: ()=> this.setState({section:'link'}),
+      goParentHome: ()=> this.setState({section:'home'}),
+      // menu
+      menu,
+      dday: this.dday(),
+      ddayTargetLabel: '2026 수능 · 11월 19일(목)',
+      ddayTarget: '2026.11.19',
+
+      // section flags
+      secDash: s.section==='dashboard',
+      secTodo: s.section==='todo',
+      secMat: s.section==='materials',
+      secCam: s.section==='camstudy',
+      secGrade: s.section==='grades',
+      secSet: s.section==='settings',
+      secParentHome: s.section==='home',
+      secLink: s.section==='link',
+      isParent, isStudent: !isParent,
+      userChildName: '김민준',
+      gradeChipsPad: isParent ? 'padding-top:4px;' : 'padding-top:32px;',
+      gradeHeaderNote: isParent ? '자녀 '+('김민준')+' · 과목별 성적' : null,
+
+      // dashboard
+      dashVar1: s.dashVar===1, dashVar2: s.dashVar===2,
+      setDashA: ()=> this.setState({dashVar:1}),
+      setDashB: ()=> this.setState({dashVar:2}),
+      dashAStyle: 'flex:1;border:1px solid #16161614;padding:9px 0;font-size:14px;line-height:20px;text-align:center;'+(s.dashVar===1?'background:#161616;color:#fff;':'background:#fff;color:rgba(22,22,22,0.5);'),
+      dashBStyle: 'flex:1;border:1px solid #16161614;border-left:none;padding:9px 0;font-size:14px;line-height:20px;text-align:center;'+(s.dashVar===2?'background:#161616;color:#fff;':'background:#fff;color:rgba(22,22,22,0.5);'),
+      todayLabel: '2026년 7월 1일 (수)',
+      quote: this.todayQuote().t,
+      quoteAuthor: this.todayQuote().a,
+      weekPct: 68, weekDone: 34, weekTotal: 50,
+      weekBars: [
+        {name:'국어', pct:80, label:'8/10'},
+        {name:'수학', pct:60, label:'9/15'},
+        {name:'영어', pct:75, label:'6/8'},
+        {name:'생명과학1', pct:57, label:'4/7'},
+        {name:'지구과학1', pct:60, label:'6/10'},
+      ].map(b=>({...b, fillStyle:'position:absolute;left:0;top:0;height:100%;background:#161616;width:'+b.pct+'%;'})),
+      cumHours:'312h', weekHours:'28h 40m', avgDay:'4h 06m', streakDays:'17일',
+      todosDaily: td.map(t=>({ ...t,
+        badgeStyle:this.badge(),
+        boxStyle:'width:22px;height:22px;flex:none;border-radius:2px;border:1px solid '+(t.done?'#161616':'#c6c6c6')+';background:'+(t.done?'#161616':'#fff')+';display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;',
+        check: t.done?'✓':'',
+        titleStyle:'font-size:16px;line-height:28px;font-weight:400;color:'+(t.done?'rgba(22,22,22,0.4)':'#161616')+';'+(t.done?'text-decoration:line-through;':''),
+        toggle:()=> this.toggleTodo(t.id),
+      })),
+      doneCount, totalCount: td.length,
+
+      // ---------- TODO ----------
+      todoTabs: this.makeTabs('todo', [['daily','데일리 투두'],['weekly','주간 계획']]),
+      todoDailyTab: s.tabs.todo==='daily',
+      todoWeeklyTab: s.tabs.todo==='weekly',
+      weeklyPlan: [
+        {day:'월', date:'6/29', done:6, total:6},
+        {day:'화', date:'6/30', done:5, total:7},
+        {day:'수', date:'7/1', done:2, total:5, today:true},
+        {day:'목', date:'7/2', done:0, total:6},
+        {day:'금', date:'7/3', done:0, total:5},
+        {day:'토', date:'7/4', done:0, total:8},
+        {day:'일', date:'7/5', done:0, total:4},
+      ].map(d=>{
+        const pct = d.total? Math.round(d.done/d.total*100):0;
+        return {...d, count:d.done+' / '+d.total,
+          numStyle:'font-size:20px;line-height:32px;font-weight:'+(d.today?'600':'400')+';color:'+(d.today?'#161616':'rgba(22,22,22,0.7)')+';',
+          dayStyle:'font-size:16px;line-height:28px;color:'+(d.today?'#161616':'rgba(22,22,22,0.5)')+';',
+          fillStyle:'position:absolute;left:0;top:0;height:100%;background:#161616;width:'+pct+'%;',
+          todayTag: d.today?'오늘':'' };
+      }),
+
+      // ---------- MATERIALS ----------
+      matTabs: this.makeTabs('materials', [['book','교재'],['exam','시험지']]),
+      matBookTab: s.tabs.materials==='book',
+      matExamTab: s.tabs.materials==='exam',
+      tagChips: ['전체','기출','모평','학평','독서','유형','어법','오답'].map((t,i)=>({
+        label:t,
+        style:'border:1px solid '+(i===0?'#161616':'#c6c6c6')+';background:'+(i===0?'#161616':'#fff')+';color:'+(i===0?'#fff':'#393939')+';border-radius:2px;padding:4px 10px;font-size:14px;line-height:20px;white-space:nowrap;',
+      })),
+      books: [
+        {subject:'국어', title:'유신T 시즌3 집중탐구영역', pub:'유신국어', tags:'독서 · 기출', todos:12},
+        {subject:'수학', title:'쎈 수학1', pub:'좋은책신사고', tags:'유형 · 개념', todos:24},
+        {subject:'영어', title:'능률 EBS 수능특강 영어독해 변형', pub:'능률교육', tags:'어법 · 변형', todos:8},
+        {subject:'생명과학1', title:'마더텅 수능기출 생명과학Ⅰ', pub:'마더텅', tags:'기출 · 오답', todos:15},
+        {subject:'지구과학1', title:'자이스토리 지구과학Ⅰ', pub:'수경출판사', tags:'기출', todos:9},
+      ].map(b=>({...b, badgeStyle:this.badge()})),
+      examPapers: [
+        {subject:'국어', title:'2026학년도 6월 모의평가 국어', date:'26.06.04', tag:'모평'},
+        {subject:'수학', title:'2026학년도 6월 모의평가 수학', date:'26.06.04', tag:'모평'},
+        {subject:'영어', title:'2026년 4월 전국연합학력평가 영어', date:'26.04.10', tag:'학평'},
+        {subject:'생명과학1', title:'2026년 3월 학력평가 생명과학Ⅰ', date:'26.03.26', tag:'학평'},
+      ].map(b=>({...b, badgeStyle:this.badge()})),
+
+      // ---------- CAMSTUDY ----------
+      camTabs: this.makeTabs('camstudy', [['live','진행'],['timeline','학습 타임라인']]),
+      camLiveTab: s.tabs.camstudy==='live',
+      camTimelineTab: s.tabs.camstudy==='timeline',
+      camRunning: s.camRunning,
+      camTime: this.fmtTime(s.camSeconds),
+      camBtnLabel: s.camRunning ? '캠스터디 종료' : '캠스터디 시작',
+      camBtnStyle: 'width:100%;border:none;border-radius:2px;padding:16px 0;font-size:16px;line-height:28px;font-weight:600;'+(s.camRunning?'background:#fff;color:#161616;border:1px solid #161616;':'background:#161616;color:#fff;'),
+      toggleCam: ()=> this.setState(st=>({camRunning:!st.camRunning})),
+      camStatusText: s.camRunning ? '녹화 중 · '+this.state.camInterval+'분마다 자동 촬영' : '웹캠을 선택하고 학습을 시작하세요',
+      camDot: s.camRunning,
+      intervalChips: [5,10,15,30].map(n=>({
+        label:n+'분',
+        style:'flex:1;border:1px solid #16161614;padding:10px 0;font-size:14px;line-height:20px;text-align:center;background:'+(this.state.camInterval===n?'#161616':'#fff')+';color:'+(this.state.camInterval===n?'#fff':'rgba(22,22,22,0.5)')+';'+(n===5?'':'margin-left:-1px;'),
+        set:()=> this.setState({camInterval:n}),
+      })),
+      timelineEntries: this.timelineData().map(e=>({
+        ...e,
+        badgeStyle:this.badge(),
+        memoUrl: s.memos[e.id]||null,
+        hasMemo: !!s.memos[e.id],
+        memoBtnLabel: s.memos[e.id] ? '손글씨 메모 수정' : '손글씨 메모 추가',
+        editMemo: ()=>this.setState({memoEditId:e.id}),
+      })),
+      camTimelineCount: this.timelineData().length,
+      memoOpen: !!s.memoEditId,
+      memoEntry: (()=>{ const e=this.timelineData().find(x=>x.id===s.memoEditId); return e?{...e, hasSaved: !!s.memos[e.id]}:null; })(),
+      penSwatches: [
+        {c:'#e0362f', label:'빨강'},
+        {c:'#161616', label:'검정'},
+        {c:'#003ce0', label:'파랑'},
+      ].map(p=>({ ...p,
+        style:'width:32px;height:32px;border-radius:50%;background:'+p.c+';border:2px solid '+(s.penColor===p.c?'#161616':'transparent')+';outline:1px solid #16161614;padding:0;',
+        pick:()=>this.setState({penColor:p.c}),
+      })),
+      clearCanvas: ()=>this._clearCanvas(),
+      saveMemo: ()=>this._saveMemo(),
+      deleteMemo: ()=>this._deleteMemo(),
+      closeMemo: ()=>{ this._ctx=null; this._canvas=null; this.setState({memoEditId:null}); },
+      camTotalToday: '3h 24m',
+      camSessions: '2회',
+
+      // ---------- GRADES ----------
+      gradeTabs: this.makeTabs('grades', [['exam','시험 목록'],['trend','성적 추이']]),
+      gradeExamTab: s.tabs.grades==='exam',
+      gradeTrendTab: s.tabs.grades==='trend',
+      examList: [
+        {name:'2026학년도 6월 모의평가', date:'26.06.04', type:'모평', rows:[['국어',2,'94점'],['수학',2,'88점'],['영어',1,'92점']]},
+        {name:'2026년 4월 전국연합학력평가', date:'26.04.10', type:'학평', rows:[['국어',3,'86점'],['수학',2,'84점'],['영어',2,'89점']]},
+        {name:'2026년 3월 전국연합학력평가', date:'26.03.26', type:'학평', rows:[['국어',3,'83점'],['수학',3,'76점'],['영어',2,'88점']]},
+      ].map(e=>({...e, badgeStyle:this.badge(),
+        cells:e.rows.map(r=>({subject:r[0], grade:r[1]+'등급', score:r[2],
+          gradeBadge:'display:inline-block;border-radius:2px;border:1px solid #c6c6c6;background:#f4f4f4;padding:0 6px;font-size:14px;line-height:24px;font-weight:600;color:#393939;'})),
+      })),
+      trend: this.buildTrend(),
+      ...(()=>{
+        const subj=s.gradeSubject;
+        const all=this.examData()[subj]||[];
+        const chip=(active)=>'border:1px solid '+(active?'#161616':'#c6c6c6')+';background:'+(active?'#161616':'#fff')+';color:'+(active?'#fff':'#393939')+';border-radius:2px;padding:8px 16px;font-size:16px;line-height:24px;white-space:nowrap;';
+        const tchip=(active)=>'border:1px solid '+(active?'#161616':'#c6c6c6')+';background:'+(active?'#161616':'#fff')+';color:'+(active?'#fff':'#393939')+';border-radius:2px;padding:5px 13px;font-size:14px;line-height:22px;white-space:nowrap;';
+        const filtered = s.examType==='전체'? all : all.filter(e=>e.type===s.examType);
+        const grades=all.map(e=>e.grade);
+        const stdEx=all.filter(e=>e.type==='모평'||e.type==='학평');
+        let deltaLabel='기록 1개';
+        if(stdEx.length>=2){ const d=stdEx[1].grade-stdEx[0].grade; deltaLabel = d>0?('▾ '+d+'등급 상승'):d<0?('▴ '+(-d)+'등급 하락'):'변동 없음'; }
+        const detail = s.examDetailId ? all.find(e=>e.id===s.examDetailId) : null;
+        return {
+          subjectChips: this.examSubjects().map(sub=>({label:sub, style:chip(sub===subj), pick:()=>this.setState({gradeSubject:sub, examType:'전체'})})),
+          typeChips: ['전체','모평','학평','내신','사설'].map(t=>({label:t, style:tchip(t===s.examType), pick:()=>this.setState({examType:t})})),
+          gradeSubject:subj,
+          subjSummary:{ latest: grades.length?grades[0]:'—', best: grades.length?Math.min(...grades):'—', count: all.length, deltaLabel },
+          subjTrend: this.buildSubjectTrend(subj),
+          filteredExams: filtered.map(e=>({ ...e, badgeStyle:this.badge(), gradeNum:e.grade, open:()=>this.setState({examDetailId:e.id}) })),
+          filteredCount: filtered.length,
+          filteredEmpty: filtered.length===0,
+          openRegister:()=>this.setState({registerOpen:true}),
+          closeRegister:()=>this.setState({registerOpen:false}),
+          registerOpen:s.registerOpen,
+          registerTypeChips:['모평','학평','내신','사설','수능'].map(t=>({label:t, style:tchip(t===s.registerType), pick:()=>this.setState({registerType:t})})),
+          detailOpen: !!detail,
+          closeDetail:()=>this.setState({examDetailId:null}),
+          detail: detail ? {
+            subject:subj, type:detail.type, name:detail.name, date:detail.date,
+            grade:detail.grade, raw:detail.raw, pct: detail.pct==null?'—':detail.pct, std: detail.std==null?'—':detail.std,
+            badgeStyle:this.badge(),
+            wrongCount:detail.wrong.length,
+            wrongChips:detail.wrong.map(w=>({label:w, style:'display:inline-block;border:1px solid #c6c6c6;background:#fff;border-radius:2px;padding:4px 11px;font-size:14px;line-height:22px;color:#393939;'})),
+            memo:detail.memo, hasMemo: !!detail.memo,
+          } : null,
+        };
+      })(),
+
+      // ---------- SETTINGS ----------
+      notifRows: [
+        {key:'todo', label:'투두 알림', desc:'학습 계획 시간에 맞춰 알림'},
+        {key:'exam', label:'시험 일정 알림', desc:'등록한 시험 D-3 · D-1 알림'},
+        {key:'cam', label:'캠스터디 참여 알림', desc:'친구가 캠스터디를 시작하면 알림'},
+      ].map(r=>({...r, on:s.notif[r.key],
+        trackStyle:'width:44px;height:26px;border-radius:13px;flex:none;position:relative;transition:.15s;background:'+(s.notif[r.key]?'#161616':'#e2e2e2')+';',
+        knobStyle:'position:absolute;top:3px;left:'+(s.notif[r.key]?'21px':'3px')+';width:20px;height:20px;border-radius:50%;background:#fff;transition:.15s;',
+        toggle:()=> this.setState(st=>({notif:{...st.notif,[r.key]:!st.notif[r.key]}})),
+      })),
+      authCode: 'ENE-4827-QK',
+
+      // ---------- PARENT ----------
+      childName: '김민준',
+      parentStats: [
+        {label:'오늘 완료율', value:'40%'},
+        {label:'이번 주 완료율', value:'68%'},
+        {label:'오늘 학습시간', value:'3h 24m'},
+        {label:'연속 학습', value:'17일'},
+      ],
+    };
+  }
+
+  buildTrend(){
+    const exams = [
+      {label:'3월', avg:2.67}, {label:'4월', avg:2.33}, {label:'6월', avg:1.67},
+    ];
+    const W=600, H=200, padX=40, padTop=24, padBot=40;
+    const n=exams.length;
+    const x=(i)=> padX + (n===1?0:i*(W-2*padX)/(n-1));
+    const y=(g)=> padTop + (g-1)/(9-1)*(H-padTop-padBot);
+    const pts = exams.map((e,i)=> x(i).toFixed(1)+','+y(e.avg).toFixed(1)).join(' ');
+    const dots = exams.map((e,i)=>({cx:x(i).toFixed(1), cy:y(e.avg).toFixed(1), label:e.label, val:e.avg.toFixed(1)+'등급'}));
+    return {W, H, points:pts, dots};
+  }
+
+  toggleTodo(id){
+    const td = this.todos().map(t=> t.id===id ? {...t, done:!t.done} : t);
+    this.setState({todos: td});
+  }
+}
+</script>
+</body>
+</html>
