@@ -29,11 +29,11 @@ export async function GET(req: Request) {
     request.createdAt.toISOString()
   );
 
-  if (result !== "verified") {
+  if (result.status !== "verified") {
     if (request.status === "PENDING") {
       await prisma.verificationRequest.update({ where: { id }, data: { status: "CHECKING" } });
     }
-    return NextResponse.json({ status: "pending" });
+    return NextResponse.json({ status: result.status, reason: result.reason });
   }
 
   // First time seeing verified — finalize login/signup.

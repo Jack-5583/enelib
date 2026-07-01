@@ -27,8 +27,10 @@ export function AuthScreen() {
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
   const [octomoNumberLabel, setOctomoNumberLabel] = useState("1666-3538");
   const [octomoNumber, setOctomoNumber] = useState("16663538");
+  const [errorReason, setErrorReason] = useState("");
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const unavailableStreakRef = useRef(0);
 
   const canProceed = () => {
     if (!isValidPhone(phone)) return false;
@@ -107,6 +109,7 @@ export function AuthScreen() {
 
   function beginPolling(id: string) {
     setVerifyStatus("checking");
+    unavailableStreakRef.current = 0;
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
       try {
@@ -122,6 +125,17 @@ export function AuthScreen() {
         } else if (data.status === "expired") {
           if (pollRef.current) clearInterval(pollRef.current);
           setVerifyStatus("expired");
+        } else if (data.status === "unavailable") {
+          // Surface real config/connectivity problems after a couple of
+          // consecutive failures instead of spinning forever.
+          unavailableStreakRef.current += 1;
+          if (unavailableStreakRef.current >= 2) {
+            if (pollRef.current) clearInterval(pollRef.current);
+            setErrorReason(data.reason || "알 수 없는 오류");
+            setVerifyStatus("error");
+          }
+        } else {
+          unavailableStreakRef.current = 0;
         }
       } catch {
         // transient — keep polling
@@ -422,6 +436,18 @@ export function AuthScreen() {
                 {verifyStatus === "expired" && (
                   <div className="flex flex-col items-center justify-center py-12">
                     <p className="m-0 text-[18px] text-[#161616]">인증 시간이 만료되었어요.</p>
+                    <button onClick={backLanding} className="mt-6 rounded-[2px] border border-[#161616] bg-white px-6 py-3 text-[14px] text-[#161616]">
+                      처음으로
+                    </button>
+                  </div>
+                )}
+
+                {verifyStatus === "error" && (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <p className="m-0 text-[18px] text-[#161616]">인증 확인 중 문제가 발생했어요.</p>
+                    <p className="m-0 mt-3 max-w-[420px] rounded-[2px] bg-[#f4f4f4] px-4 py-3 text-center font-mono text-[12px] leading-5 break-words text-[#161616]/70">
+                      {errorReason}
+                    </p>
                     <button onClick={backLanding} className="mt-6 rounded-[2px] border border-[#161616] bg-white px-6 py-3 text-[14px] text-[#161616]">
                       처음으로
                     </button>

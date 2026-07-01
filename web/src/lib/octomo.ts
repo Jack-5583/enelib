@@ -44,21 +44,28 @@ export function buildOctomoMessageBody(code: string) {
   return `OCTOMO 인증 ${code}`;
 }
 
-export type OctomoCheckResult = "verified" | "pending" | "unavailable";
+export interface OctomoCheckOutcome {
+  status: "verified" | "pending" | "unavailable";
+  /** Safe-to-display diagnostic string (never includes the API key). */
+  reason?: string;
+}
 
 export async function checkOctomoVerification(
   phone: string,
   code: string,
   createdAtIso: string,
   withinMinutes = 5
-): Promise<OctomoCheckResult> {
+): Promise<OctomoCheckOutcome> {
   if (DEV_BYPASS) {
     // Simulate the SMS arriving ~2.5s after the request was created.
     const elapsed = Date.now() - new Date(createdAtIso).getTime();
-    return elapsed > 2500 ? "verified" : "pending";
+    return { status: elapsed > 2500 ? "verified" : "pending" };
   }
 
-  if (!API_KEY) return "unavailable";
+  if (!API_KEY) {
+    return { status: "unavailable", reason: "OCTOMO_API_KEY 환경변수가 설정되지 않았습니다." };
+  }
+
   try {
     const res = await fetch(`${API_BASE}/message/exists`, {
       method: "POST",
@@ -69,15 +76,33 @@ export async function checkOctomoVerification(
         withinMinutes,
       }),
     });
+    const bodyText = await res.text();
     if (!res.ok) {
-      console.error("[octomo] message/exists error", res.status, await res.text().catch(() => ""));
-      return "unavailable";
+      const reason = `OCTOMO 응답 오류 (HTTP ${res.status}): ${bodyText.slice(0, 300)}`;
+      console.error("[octomo] message/exists error", res.status, bodyText);
+      return { status: "unavailable", reason };
     }
-    const data = await res.json();
-    return data?.verified ? "verified" : "pending";
+    let data: unknown;
+    try {
+      data = JSON.parse(bodyText);
+    } catch {
+      return {
+        status: "unavailable",
+        reason: `OCTOMO 응답을 해석할 수 없습니다: ${bodyText.slice(0, 300)}`,
+      };
+    }
+    const verified = (data as { verified?: boolean } | null)?.verified;
+    if (typeof verified !== "boolean") {
+      return {
+        status: "unavailable",
+        reason: `OCTOMO 응답 형식이 예상과 다릅니다: ${JSON.stringify(data).slice(0, 300)}`,
+      };
+    }
+    return { status: verified ? "verified" : "pending" };
   } catch (err) {
+    const reason = `OCTOMO 서버에 연결할 수 없습니다: ${err instanceof Error ? err.message : String(err)}`;
     console.error("[octomo] verification check failed:", err);
-    return "unavailable";
+    return { status: "unavailable", reason };
   }
 }
 
