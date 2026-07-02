@@ -5,8 +5,7 @@ import { SegTabs } from "@/components/ui/SegTabs";
 import { CheckBox } from "@/components/ui/CheckBox";
 import { Badge } from "@/components/ui/Badge";
 import { Sheet } from "@/components/ui/Sheet";
-
-const SUBJECTS = ["국어", "수학", "영어", "생명과학1", "지구과학1", "기타"];
+import { SUBJECTS } from "@/lib/subjects";
 
 interface TodoItem {
   id: string;
@@ -15,6 +14,7 @@ interface TodoItem {
   done: boolean;
   memo: string | null;
   photoUrl: string | null;
+  bookId: string | null;
   materialLabel: string | null;
 }
 
@@ -29,12 +29,21 @@ function todayIso() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function shiftIso(iso: string, days: number) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 export function Todo() {
   const [tab, setTab] = useState<"daily" | "weekly">("daily");
+  const [viewDate, setViewDate] = useState(todayIso());
   const [todayLabel, setTodayLabel] = useState("");
+  const [isToday, setIsToday] = useState(true);
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [week, setWeek] = useState<{ weekLabel: string; days: { day: string; date: string; done: number; total: number; today: boolean }[] } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [editing, setEditing] = useState<TodoItem | null>(null);
   const [books, setBooks] = useState<BookOption[]>([]);
 
   const [subject, setSubject] = useState(SUBJECTS[0]);
@@ -43,11 +52,12 @@ export function Todo() {
   const [date, setDate] = useState(todayIso());
   const [saving, setSaving] = useState(false);
 
-  function loadDaily() {
-    fetch("/api/todos?range=today")
+  function loadDaily(forDate: string) {
+    fetch(`/api/todos?range=today&date=${forDate}`)
       .then((r) => r.json())
       .then((d) => {
         setTodayLabel(d.todayLabel);
+        setIsToday(d.isToday);
         setTodos(d.todos);
       });
   }
@@ -58,8 +68,8 @@ export function Todo() {
   }
 
   useEffect(() => {
-    loadDaily();
-  }, []);
+    loadDaily(viewDate);
+  }, [viewDate]);
 
   useEffect(() => {
     if (tab === "weekly" && !week) loadWeekly();
@@ -74,14 +84,32 @@ export function Todo() {
     });
   }
 
+  async function ensureBooksLoaded() {
+    if (books.length === 0) {
+      const list = await fetch("/api/materials/books").then((r) => r.json());
+      setBooks(list);
+      return list as BookOption[];
+    }
+    return books;
+  }
+
   function openAdd() {
     setSubject(SUBJECTS[0]);
     setTitle("");
     setBookId("");
-    setDate(todayIso());
-    fetch("/api/materials/books")
-      .then((r) => r.json())
-      .then(setBooks);
+    setDate(viewDate);
+    ensureBooksLoaded();
+    setEditing(null);
+    setAddOpen(true);
+  }
+
+  async function openEdit(t: TodoItem) {
+    setSubject(t.subject);
+    setTitle(t.title);
+    setBookId(t.bookId || "");
+    setDate(viewDate);
+    await ensureBooksLoaded();
+    setEditing(t);
     setAddOpen(true);
   }
 
@@ -89,20 +117,42 @@ export function Todo() {
     if (!title.trim() || saving) return;
     setSaving(true);
     const book = books.find((b) => b.id === bookId);
-    await fetch("/api/todos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        subject,
-        title: title.trim(),
-        date,
-        bookId: bookId || undefined,
-        materialLabel: book ? book.title : undefined,
-      }),
-    });
+    if (editing) {
+      await fetch(`/api/todos/${editing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject,
+          title: title.trim(),
+          date,
+          bookId: bookId || null,
+          materialLabel: book ? book.title : null,
+        }),
+      });
+    } else {
+      await fetch("/api/todos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject,
+          title: title.trim(),
+          date,
+          bookId: bookId || undefined,
+          materialLabel: book ? book.title : undefined,
+        }),
+      });
+    }
     setSaving(false);
     setAddOpen(false);
-    loadDaily();
+    setEditing(null);
+    loadDaily(viewDate);
+    setWeek(null);
+  }
+
+  async function deleteTodo(id: string) {
+    if (!window.confirm("이 투두를 삭제할까요?")) return;
+    await fetch(`/api/todos/${id}`, { method: "DELETE" });
+    loadDaily(viewDate);
     setWeek(null);
   }
 
@@ -119,8 +169,26 @@ export function Todo() {
 
       {tab === "daily" ? (
         <>
-          <div className="flex items-baseline justify-between border-b border-[#161616]/96 pt-8 pb-4 lg:pt-10 lg:pb-5">
-            <p className="m-0 text-[18px] leading-7 font-semibold text-[#161616] lg:text-[20px] lg:leading-8">{todayLabel}</p>
+          <div className="flex items-center justify-between pt-8 lg:pt-10">
+            <div className="flex items-center gap-2.5">
+              <button onClick={() => setViewDate((d) => shiftIso(d, -1))} aria-label="전날" className="border-none bg-none p-1 text-[16px] text-[#161616]/50">
+                ‹
+              </button>
+              <p className="m-0 text-[15px] leading-6 text-[#161616]/60 lg:text-[16px]">{todayLabel}</p>
+              <button onClick={() => setViewDate((d) => shiftIso(d, 1))} aria-label="다음날" className="border-none bg-none p-1 text-[16px] text-[#161616]/50">
+                ›
+              </button>
+              {!isToday && (
+                <button onClick={() => setViewDate(todayIso())} className="border-none bg-none p-0 text-[13px] text-[#003ce0] underline underline-offset-[3px]">
+                  오늘로
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="flex items-baseline justify-between border-b border-[#161616]/96 pt-2 pb-4 lg:pb-5">
+            <p className="m-0 text-[18px] leading-7 font-semibold text-[#161616] lg:text-[20px] lg:leading-8">
+              투두 {todos.length}개
+            </p>
             <button onClick={openAdd} className="border-none bg-none p-0 text-[14px] text-[#161616] underline underline-offset-[3px] lg:text-[16px]">
               + 투두 추가
             </button>
@@ -129,22 +197,32 @@ export function Todo() {
             <div key={t.id} className="flex items-start gap-3.5 border-b border-[#16161614] py-4 lg:py-5">
               <CheckBox checked={t.done} onClick={() => toggle(t.id, t.done)} />
               <div className="min-w-0 flex-1">
-                <div className="mb-1.5 flex items-center gap-2">
-                  <Badge>{t.subject}</Badge>
-                  {t.materialLabel && (
-                    <span className="truncate text-[13px] leading-5 text-[#161616]/50 lg:text-[14px] lg:leading-6">
-                      🔗 {t.materialLabel}
-                    </span>
-                  )}
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Badge>{t.subject}</Badge>
+                    {t.materialLabel && (
+                      <span className="truncate text-[13px] leading-5 text-[#161616]/50 lg:text-[14px] lg:leading-6">
+                        🔗 {t.materialLabel}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-none items-center gap-2.5">
+                    <button onClick={() => openEdit(t)} className="border-none bg-none p-0 text-[12px] text-[#161616]/50 underline underline-offset-[3px] lg:text-[13px]">
+                      수정
+                    </button>
+                    <button onClick={() => deleteTodo(t.id)} className="border-none bg-none p-0 text-[12px] text-[#e0362f]/80 underline underline-offset-[3px] lg:text-[13px]">
+                      삭제
+                    </button>
+                  </div>
                 </div>
                 <p className={`m-0 mb-1.5 text-[15px] leading-6 lg:text-[16px] lg:leading-7 ${t.done ? "text-[#161616]/40 line-through" : "text-[#161616]"}`}>
                   {t.title}
                 </p>
-                <TodoVerify todo={t} onSaved={loadDaily} />
+                <TodoVerify todo={t} onSaved={() => loadDaily(viewDate)} />
               </div>
             </div>
           ))}
-          {todos.length === 0 && <p className="m-0 py-12 text-center text-[14px] text-[#161616]/40">오늘 등록된 투두가 없습니다.</p>}
+          {todos.length === 0 && <p className="m-0 py-12 text-center text-[14px] text-[#161616]/40">{isToday ? "오늘" : "해당 날짜에"} 등록된 투두가 없습니다.</p>}
         </>
       ) : (
         week && (
@@ -180,8 +258,14 @@ export function Todo() {
         )
       )}
 
-      <Sheet open={addOpen} onClose={() => setAddOpen(false)}>
-        <h2 className="m-0 mb-6 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">투두 추가</h2>
+      <Sheet
+        open={addOpen}
+        onClose={() => {
+          setAddOpen(false);
+          setEditing(null);
+        }}
+      >
+        <h2 className="m-0 mb-6 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">{editing ? "투두 수정" : "투두 추가"}</h2>
         <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">과목</p>
         <select
           value={subject}
@@ -222,11 +306,17 @@ export function Todo() {
           className="mb-8 w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none"
         />
         <div className="flex gap-3">
-          <button onClick={() => setAddOpen(false)} className="w-[100px] flex-none rounded-[2px] border border-[#161616] bg-white py-3.5 text-[15px] font-medium text-[#161616]">
+          <button
+            onClick={() => {
+              setAddOpen(false);
+              setEditing(null);
+            }}
+            className="w-[100px] flex-none rounded-[2px] border border-[#161616] bg-white py-3.5 text-[15px] font-medium text-[#161616]"
+          >
             취소
           </button>
           <button onClick={submitAdd} disabled={saving || !title.trim()} className="flex-1 rounded-[2px] border-none bg-[#161616] py-3.5 text-[16px] font-semibold text-white disabled:opacity-50">
-            추가하기
+            {editing ? "저장하기" : "추가하기"}
           </button>
         </div>
       </Sheet>

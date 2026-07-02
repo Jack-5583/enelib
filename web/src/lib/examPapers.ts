@@ -47,6 +47,7 @@ export function examPaperListItemDTO(paper: PaperListShape) {
     kind: paper.kind,
     subject: paper.subject,
     title: examPaperDisplayTitle(paper),
+    isSeries: !!paper.series,
     type: EXAM_TYPE_LABEL[paper.type],
     examDate: paper.examDate,
     maxScore: paper.maxScore,

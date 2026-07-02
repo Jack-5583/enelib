@@ -67,6 +67,7 @@ export async function GET(req: Request) {
       done: t.done,
       memo: t.memo,
       photoUrl: t.photoUrl,
+      bookId: t.bookId,
       materialLabel: t.materialLabel || t.book?.title || null,
     })),
   });

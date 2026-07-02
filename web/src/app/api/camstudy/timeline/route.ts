@@ -49,6 +49,11 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
 
+  // Auto-captures (from a live session) always end "now"; manual multi-photo
+  // uploads have no real duration, so they just end when they start.
+  const capturedAt = parsed.data.segmentStart ? new Date(parsed.data.segmentStart) : new Date();
+  const endedAt = parsed.data.camSessionId ? new Date() : capturedAt;
+
   const entry = await prisma.timelineEntry.create({
     data: {
       ownerId: user.id,
@@ -57,8 +62,8 @@ export async function POST(req: Request) {
       todoTitle: parsed.data.todoTitle || null,
       durationLabel: parsed.data.durationLabel || null,
       photoUrls: parsed.data.photoUrls,
-      capturedAt: parsed.data.segmentStart ? new Date(parsed.data.segmentStart) : new Date(),
-      endedAt: new Date(),
+      capturedAt,
+      endedAt,
     },
   });
   return NextResponse.json({ id: entry.id });

@@ -6,7 +6,14 @@ import { Badge } from "@/components/ui/Badge";
 import { Sheet } from "@/components/ui/Sheet";
 
 const TYPE_FILTERS = ["전체", "모평", "학평", "내신", "사설"];
-const REGISTER_TYPES = ["모평", "학평", "내신", "사설", "수능"];
+
+interface ExamPaperCandidate {
+  id: string;
+  title: string;
+  type: string;
+  examDate: string;
+  maxScore: number | null;
+}
 
 interface GradesData {
   subjectChips: string[];
@@ -305,9 +312,88 @@ function ExamDetailSheet({
 }
 
 function RegisterSheet({ subject, onClose, onSaved }: { subject: string; onClose: () => void; onSaved: () => void }) {
-  const [type, setType] = useState(REGISTER_TYPES[0]);
-  const [name, setName] = useState("");
-  const [date, setDate] = useState("");
+  const [candidates, setCandidates] = useState<ExamPaperCandidate[] | null>(null);
+  const [selected, setSelected] = useState<ExamPaperCandidate | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/grades/candidates?subject=${encodeURIComponent(subject)}`)
+      .then((r) => r.json())
+      .then((d: ExamPaperCandidate[]) => setCandidates(Array.isArray(d) ? d : []));
+  }, [subject]);
+
+  if (selected) {
+    return (
+      <ScoreForm
+        subject={subject}
+        paper={selected}
+        onBack={() => setSelected(null)}
+        onClose={onClose}
+        onSaved={onSaved}
+      />
+    );
+  }
+
+  return (
+    <Sheet open onClose={onClose} maxWidth={560}>
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="m-0 mb-1 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">시험 등록</h2>
+          <p className="m-0 text-[14px] leading-6 text-[#161616]/50 lg:text-[16px] lg:leading-7">
+            <span className="font-semibold text-[#161616]">{subject}</span> 과목에 등록된 시험지 중 하나를 선택하세요.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        {candidates == null && <p className="m-0 py-8 text-center text-[14px] text-[#161616]/40">불러오는 중…</p>}
+        {candidates != null && candidates.length === 0 && (
+          <p className="m-0 py-8 text-center text-[14px] leading-6 text-[#161616]/40">
+            등록할 수 있는 시험지가 없습니다.
+            <br />
+            학습자료에서 {subject} 시험지를 먼저 등록하세요.
+          </p>
+        )}
+        {candidates?.map((c) => (
+          <button
+            key={c.id}
+            onClick={() => setSelected(c)}
+            className="flex w-full items-center gap-3 border-0 border-b border-[#16161614] bg-white py-4 text-left"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center gap-2">
+                <Badge>{c.type}</Badge>
+                <span className="text-[13px] text-[#161616]/50">{c.examDate}</span>
+              </div>
+              <p className="m-0 text-[15px] leading-6 text-[#161616] lg:text-[16px]">{c.title}</p>
+            </div>
+            {c.maxScore != null && <span className="flex-none text-[13px] text-[#161616]/40">만점 {c.maxScore}</span>}
+            <span className="flex-none text-[16px] text-[#161616]/30">→</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-9 flex gap-3">
+        <button onClick={onClose} className="w-full flex-none rounded-[2px] border border-[#161616] bg-white py-3.5 text-[16px] font-medium text-[#161616]">
+          취소
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+function ScoreForm({
+  subject,
+  paper,
+  onBack,
+  onClose,
+  onSaved,
+}: {
+  subject: string;
+  paper: ExamPaperCandidate;
+  onBack: () => void;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [grade, setGrade] = useState("");
   const [raw, setRaw] = useState("");
   const [pct, setPct] = useState("");
@@ -316,17 +402,19 @@ function RegisterSheet({ subject, onClose, onSaved }: { subject: string; onClose
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
-    if (!name.trim() || !date.trim() || !grade || !raw) return;
+    if (!grade || !raw) return;
+    if (paper.maxScore != null && Number(raw) > paper.maxScore) {
+      setError(`원점수는 만점(${paper.maxScore}점)을 넘을 수 없습니다.`);
+      return;
+    }
     setSaving(true);
     setError(null);
     const res = await fetch("/api/grades", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        examPaperId: paper.id,
         subject,
-        type,
-        name: name.trim(),
-        date: date.trim(),
         raw: Number(raw),
         grade: Number(grade),
         pct: pct ? Number(pct) : null,
@@ -346,29 +434,21 @@ function RegisterSheet({ subject, onClose, onSaved }: { subject: string; onClose
     <Sheet open onClose={onClose} maxWidth={560}>
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="m-0 mb-1 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">시험 등록</h2>
-          <p className="m-0 text-[14px] leading-6 text-[#161616]/50 lg:text-[16px] lg:leading-7">
-            <span className="font-semibold text-[#161616]">{subject}</span> 과목에 새 시험 기록을 추가합니다.
-          </p>
+          <h2 className="m-0 mb-1 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">성적 입력</h2>
+          <div className="mt-2 flex items-center gap-2">
+            <Badge>{paper.type}</Badge>
+            <span className="text-[13px] text-[#161616]/50">{paper.examDate}</span>
+          </div>
+          <p className="m-0 mt-1 text-[15px] leading-6 text-[#161616] lg:text-[16px]">{paper.title}</p>
         </div>
       </div>
 
-      <p className="m-0 mt-7 mb-2.5 text-[13px] leading-5 font-semibold text-[#161616]">시험 종류</p>
-      <div className="mb-6 flex flex-wrap gap-2">
-        {REGISTER_TYPES.map((t) => (
-          <Chip key={t} active={t === type} onClick={() => setType(t)} size="sm">
-            {t}
-          </Chip>
-        ))}
-      </div>
-
-      <p className="m-0 mb-2.5 text-[13px] leading-5 font-semibold text-[#161616]">시험 이름</p>
-      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="예) 2026학년도 6월 모의평가" className="mb-6 w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none" />
-
-      <div className="mb-6 flex gap-5">
+      <div className="mt-7 mb-6 flex gap-5">
         <div className="flex-1">
-          <p className="m-0 mb-2.5 text-[13px] leading-5 font-semibold text-[#161616]">응시일</p>
-          <input value={date} onChange={(e) => setDate(e.target.value)} placeholder="26.07.10" className="w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none" />
+          <p className="m-0 mb-2.5 text-[13px] leading-5 font-semibold text-[#161616]">
+            원점수 {paper.maxScore != null && <span className="font-normal text-[#161616]/40">(만점 {paper.maxScore})</span>}
+          </p>
+          <input value={raw} onChange={(e) => setRaw(e.target.value)} inputMode="numeric" placeholder="88" className="w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none" />
         </div>
         <div className="flex-1">
           <p className="m-0 mb-2.5 text-[13px] leading-5 font-semibold text-[#161616]">등급</p>
@@ -377,10 +457,6 @@ function RegisterSheet({ subject, onClose, onSaved }: { subject: string; onClose
       </div>
 
       <div className="flex gap-5">
-        <div className="flex-1">
-          <p className="m-0 mb-2.5 text-[13px] leading-5 font-semibold text-[#161616]">원점수</p>
-          <input value={raw} onChange={(e) => setRaw(e.target.value)} inputMode="numeric" placeholder="88" className="w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none" />
-        </div>
         <div className="flex-1">
           <p className="m-0 mb-2.5 text-[13px] leading-5 font-semibold text-[#161616]">
             백분위 <span className="font-normal text-[#161616]/40">선택</span>
@@ -398,8 +474,8 @@ function RegisterSheet({ subject, onClose, onSaved }: { subject: string; onClose
       {error && <p className="m-0 mt-4 text-[13px] text-[#e0362f]">{error}</p>}
 
       <div className="mt-9 flex gap-3">
-        <button onClick={onClose} className="w-[120px] flex-none rounded-[2px] border border-[#161616] bg-white py-3.5 text-[16px] font-medium text-[#161616]">
-          취소
+        <button onClick={onBack} className="w-[120px] flex-none rounded-[2px] border border-[#161616] bg-white py-3.5 text-[16px] font-medium text-[#161616]">
+          뒤로
         </button>
         <button onClick={submit} disabled={saving} className="flex-1 rounded-[2px] border-none bg-[#161616] py-3.5 text-[16px] font-semibold text-white disabled:opacity-50">
           등록하기

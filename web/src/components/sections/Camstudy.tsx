@@ -21,6 +21,16 @@ function fmtTime(totalSeconds: number) {
   return `${p(h)}:${p(m)}:${p(s)}`;
 }
 
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function shiftIso(iso: string, days: number) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 interface TimelineEntry {
   id: string;
   time: string;
@@ -28,7 +38,7 @@ interface TimelineEntry {
   dur: string | null;
   subject: string | null;
   title: string | null;
-  photoUrl: string | null;
+  photoUrls: string[];
   hasMemo: boolean;
   memoUrl: string | null;
 }
@@ -96,7 +106,7 @@ export function Camstudy() {
         subject: todo?.subject,
         todoTitle: todo?.title,
         durationLabel: `${interval}분`,
-        photoUrl,
+        photoUrls: [photoUrl],
         segmentStart: segmentStart.toISOString(),
       }),
     });
@@ -242,30 +252,53 @@ export function Camstudy() {
           </div>
         </div>
       ) : (
-        <TimelineView />
+        <TimelineView todos={todos} />
       )}
     </div>
   );
 }
 
-function TimelineView() {
+function TimelineView({ todos }: { todos: TodoOption[] }) {
+  const [viewDate, setViewDate] = useState(todayIso());
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   const [memoEntry, setMemoEntry] = useState<TimelineEntry | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   function load() {
-    fetch("/api/camstudy/timeline")
+    fetch(`/api/camstudy/timeline?date=${viewDate}`)
       .then((r) => r.json())
       .then(setEntries);
   }
-  useEffect(load, []);
+  useEffect(load, [viewDate]);
 
+  const isToday = viewDate === todayIso();
   const totalLabel = entries.length ? `${entries.length}회` : "0회";
 
   return (
     <div>
-      <div className="flex items-baseline justify-between border-b border-[#161616]/96 pt-8 pb-4 lg:pt-10 lg:pb-5">
-        <p className="m-0 text-[18px] leading-7 font-semibold text-[#161616] lg:text-[20px] lg:leading-8">오늘 학습 인증</p>
-        <p className="m-0 text-[13px] leading-5 text-[#161616]/50 lg:text-[14px] lg:leading-6">{totalLabel}</p>
+      <div className="flex items-center gap-2.5 pt-8 lg:pt-10">
+        <button onClick={() => setViewDate((d) => shiftIso(d, -1))} aria-label="전날" className="border-none bg-none p-1 text-[16px] text-[#161616]/50">
+          ‹
+        </button>
+        <p className="m-0 text-[15px] leading-6 text-[#161616]/60 lg:text-[16px]">{viewDate}</p>
+        <button onClick={() => setViewDate((d) => shiftIso(d, 1))} aria-label="다음날" className="border-none bg-none p-1 text-[16px] text-[#161616]/50">
+          ›
+        </button>
+        {!isToday && (
+          <button onClick={() => setViewDate(todayIso())} className="border-none bg-none p-0 text-[13px] text-[#003ce0] underline underline-offset-[3px]">
+            오늘로
+          </button>
+        )}
+      </div>
+
+      <div className="flex items-baseline justify-between border-b border-[#161616]/96 pt-2 pb-4 lg:pb-5">
+        <p className="m-0 text-[18px] leading-7 font-semibold text-[#161616] lg:text-[20px] lg:leading-8">{isToday ? "오늘 학습 인증" : "학습 인증"}</p>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setUploadOpen(true)} className="border-none bg-none p-0 text-[14px] text-[#161616] underline underline-offset-[3px] lg:text-[16px]">
+            + 사진으로 인증 추가
+          </button>
+          <p className="m-0 text-[13px] leading-5 text-[#161616]/50 lg:text-[14px] lg:leading-6">{totalLabel}</p>
+        </div>
       </div>
 
       <div className="pt-3">
@@ -279,9 +312,9 @@ function TimelineView() {
             <div className="min-w-0 flex-1 py-4 pb-7 lg:py-6">
               <div className="flex flex-col border border-[#16161614] lg:flex-row">
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-[repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4_9px,#efefef_9px,#efefef_18px)] lg:w-[220px] lg:flex-none">
-                  {e.photoUrl && (
+                  {e.photoUrls[0] && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={e.photoUrl} alt="캠스터디 캡처" className="absolute inset-0 h-full w-full object-cover" />
+                    <img src={e.photoUrls[0]} alt="캠스터디 캡처" className="absolute inset-0 h-full w-full object-cover" />
                   )}
                   {e.hasMemo && e.memoUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -291,6 +324,11 @@ function TimelineView() {
                     <span className="inline-flex h-3 w-3 items-center justify-center rounded-full border-[1.5px] border-white" />
                     <span className="text-[11px] font-semibold text-white">인증됨</span>
                   </div>
+                  {e.photoUrls.length > 1 && (
+                    <span className="absolute right-2.5 bottom-2.5 rounded-[2px] bg-[#161616]/80 px-1.5 py-0.5 text-[11px] font-medium text-white">
+                      +{e.photoUrls.length - 1}
+                    </span>
+                  )}
                   {e.hasMemo && (
                     <span className="absolute top-2.5 right-2.5 rounded-[2px] border border-[#16161614] bg-white px-1.5 py-0.5 text-[11px] whitespace-nowrap text-[#161616]">
                       ✎ 메모
@@ -308,6 +346,14 @@ function TimelineView() {
                   <p className="m-0 mb-auto text-[16px] leading-6 text-[#161616] lg:text-[18px] lg:leading-7">
                     {e.title || "학습 진행 중"}
                   </p>
+                  {e.photoUrls.length > 1 && (
+                    <div className="scrollbar-hide mb-3 flex gap-1.5 overflow-x-auto">
+                      {e.photoUrls.map((url, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img key={i} src={url} alt="" className="h-12 w-12 flex-none rounded-[2px] border border-[#16161614] object-cover" />
+                      ))}
+                    </div>
+                  )}
                   <button
                     onClick={() => setMemoEntry(e)}
                     className="mt-4 self-start rounded-[2px] border border-[#161616] bg-white px-4.5 py-2.5 text-[14px] font-medium text-[#161616]"
@@ -319,7 +365,7 @@ function TimelineView() {
             </div>
           </div>
         ))}
-        {entries.length === 0 && <p className="m-0 py-12 text-center text-[14px] text-[#161616]/40">오늘 캡처된 학습 인증이 없습니다.</p>}
+        {entries.length === 0 && <p className="m-0 py-12 text-center text-[14px] text-[#161616]/40">{isToday ? "오늘" : "해당 날짜에"} 캡처된 학습 인증이 없습니다.</p>}
       </div>
 
       {memoEntry && (
@@ -332,7 +378,142 @@ function TimelineView() {
           }}
         />
       )}
+
+      {uploadOpen && (
+        <ManualUploadSheet
+          todos={todos}
+          viewDate={viewDate}
+          onClose={() => setUploadOpen(false)}
+          onSaved={() => {
+            setUploadOpen(false);
+            load();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function ManualUploadSheet({
+  todos,
+  viewDate,
+  onClose,
+  onSaved,
+}: {
+  todos: TodoOption[];
+  viewDate: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [todoId, setTodoId] = useState("");
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function onPickPhotos(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    Promise.all(
+      files.map(
+        (file) =>
+          new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          })
+      )
+    ).then((urls) => setPhotos((prev) => [...prev, ...urls]));
+  }
+
+  function removePhoto(i: number) {
+    setPhotos((prev) => prev.filter((_, j) => j !== i));
+  }
+
+  async function submit() {
+    if (photos.length === 0) {
+      setError("사진을 한 장 이상 선택해 주세요.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    const todo = todos.find((t) => t.id === todoId);
+    const res = await fetch("/api/camstudy/timeline", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subject: todo?.subject,
+        todoTitle: todo?.title,
+        photoUrls: photos,
+        // Land in the currently browsed day's timeline (KST noon avoids any day-boundary edge cases).
+        segmentStart: `${viewDate}T03:00:00.000Z`,
+      }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      setError("등록에 실패했습니다.");
+      return;
+    }
+    onSaved();
+  }
+
+  return (
+    <Sheet open onClose={onClose} maxWidth={560}>
+      <h2 className="m-0 mb-1 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">사진으로 인증 추가</h2>
+      <p className="m-0 mb-6 text-[14px] leading-6 text-[#161616]/50 lg:text-[16px]">여러 장의 사진을 한 번에 올려 학습 인증을 남길 수 있어요.</p>
+
+      {todos.length > 0 && (
+        <>
+          <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">연동 투두 (선택)</p>
+          <select
+            value={todoId}
+            onChange={(e) => setTodoId(e.target.value)}
+            className="mb-5 w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none"
+          >
+            <option value="">선택 안 함</option>
+            {todos.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.subject} · {t.title}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
+
+      <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">인증 사진 {photos.length > 0 && `(${photos.length}장)`}</p>
+      {photos.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {photos.map((url, i) => (
+            <div key={i} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="" className="h-20 w-20 rounded-[2px] border border-[#16161614] object-cover" />
+              <button
+                onClick={() => removePhoto(i)}
+                aria-label="삭제"
+                className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full border-none bg-[#161616] text-[12px] text-white"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <label className="mb-6 flex w-full cursor-pointer items-center justify-center border border-dashed border-[#c6c6c6] py-3 text-[14px] text-[#161616]/60">
+        사진 선택 (여러 장 가능)
+        <input type="file" accept="image/*" multiple className="hidden" onChange={onPickPhotos} />
+      </label>
+
+      {error && <p className="m-0 mb-4 text-[13px] text-[#e0362f]">{error}</p>}
+
+      <div className="flex gap-3">
+        <button onClick={onClose} className="w-[100px] flex-none rounded-[2px] border border-[#161616] bg-white py-3.5 text-[15px] font-medium text-[#161616]">
+          취소
+        </button>
+        <button onClick={submit} disabled={saving} className="flex-1 rounded-[2px] border-none bg-[#161616] py-3.5 text-[16px] font-semibold text-white disabled:opacity-50">
+          등록하기
+        </button>
+      </div>
+    </Sheet>
   );
 }
 
@@ -373,9 +554,9 @@ function MemoSheet({ entry, onClose, onSaved }: { entry: TimelineEntry; onClose:
       </div>
 
       <div className="relative aspect-[4/3] w-full overflow-hidden border border-[#161616] bg-[repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4_10px,#efefef_10px,#efefef_20px)]" style={{ touchAction: "none" }}>
-        {entry.photoUrl && (
+        {entry.photoUrls[0] && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={entry.photoUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img src={entry.photoUrls[0]} alt="" className="absolute inset-0 h-full w-full object-cover" />
         )}
         <span className="pointer-events-none absolute top-3 left-3.5 text-[12px] text-[#161616]/40">캡처 화면 위에 손글씨로 메모하세요</span>
         <HandwritingCanvas ref={canvasHandle} penColor={penColor} initialDataUrl={entry.memoUrl} />
