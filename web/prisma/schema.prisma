@@ -16,14 +16,6 @@ enum Role {
   PARENT
 }
 
-enum ExamType {
-  MOCK   // 모평
-  HAKPYUNG // 학평
-  NAESIN // 내신
-  PRIVATE // 사설
-  CSAT   // 수능
-}
-
 enum ExamPaperKind {
   FULL    // 풀 모의고사 (전과목)
   SUBJECT // 과목별 모의고사
@@ -53,10 +45,13 @@ model User {
 
   // student-owned data
   books        Book[]
+  materialTags MaterialTag[]
+  examTypeOptions ExamTypeOption[]
   examPapers   ExamPaper[]
   examSeries   ExamSeries[]
   todos        Todo[]
   exams        Exam[]
+  ddays        Dday[]
   camSessions  CamSession[]
   timelineEntries TimelineEntry[]
   studentAuthCodes StudentAuthCode[]
@@ -150,6 +145,47 @@ model Book {
   @@index([ownerId])
 }
 
+/// A user-managed filter tag shown above the materials (교재) list —
+/// fully customizable instead of a fixed list.
+model MaterialTag {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([ownerId, name])
+  @@index([ownerId])
+}
+
+/// A user-managed exam-paper "종류" option (모평/학평/... by default, but
+/// fully customizable) offered when registering an exam paper.
+model ExamTypeOption {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([ownerId, name])
+  @@index([ownerId])
+}
+
+/// A user-created countdown shown in Settings (in addition to the built-in
+/// CSAT D-day).
+model Dday {
+  id         String   @id @default(cuid())
+  ownerId    String
+  owner      User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  label      String
+  targetDate DateTime @db.Date
+  createdAt  DateTime @default(now())
+
+  @@index([ownerId])
+}
+
 /// A named, ongoing set of subject-specific mock exams a student takes
 /// repeatedly (e.g. "시대인재 모의고사"), registered one round at a time.
 model ExamSeries {
@@ -179,7 +215,7 @@ model ExamPaper {
   maxScore  Int?
   // shared:
   title     String
-  type      ExamType
+  type      String
   examDate  String
   createdAt DateTime      @default(now())
 

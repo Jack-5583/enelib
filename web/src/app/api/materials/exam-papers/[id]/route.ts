@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-import { EXAM_TYPE_FROM_LABEL } from "@/lib/grades";
 
 const patchSchema = z.object({
-  type: z.enum(["모평", "학평", "내신", "사설", "수능"]).optional(),
+  type: z.string().min(1).optional(),
   examDate: z.string().min(1).optional(),
   title: z.string().trim().min(1).optional(),
   maxScore: z.number().int().min(1).max(999).optional(),
@@ -27,7 +26,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   await prisma.examPaper.update({
     where: { id },
     data: {
-      type: data.type ? (EXAM_TYPE_FROM_LABEL[data.type] as never) : undefined,
+      type: data.type,
       examDate: data.examDate,
       // A series-linked paper's display title is derived from the series name; ignore direct edits.
       title: data.title && !paper.seriesId ? data.title : undefined,

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { checkOctomoVerification } from "@/lib/octomo";
 import { createSession } from "@/lib/session";
 import { generateStudentAuthCode } from "@/lib/studentCode";
+import { DEFAULT_MATERIAL_TAGS, DEFAULT_EXAM_TYPES } from "@/lib/grades";
 
 export async function GET(req: Request) {
   const id = new URL(req.url).searchParams.get("id");
@@ -62,6 +63,13 @@ export async function GET(req: Request) {
             code: generateStudentAuthCode(),
             expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
           },
+        });
+        // Seed the customizable material-tag and exam-type pickers so they aren't empty.
+        await tx.materialTag.createMany({
+          data: DEFAULT_MATERIAL_TAGS.map((name, order) => ({ ownerId: created.id, name, order })),
+        });
+        await tx.examTypeOption.createMany({
+          data: DEFAULT_EXAM_TYPES.map((name, order) => ({ ownerId: created.id, name, order })),
         });
       }
 

@@ -22,3 +22,9 @@ export function formatDdayTargetLabel(target: Date) {
 export function formatTodayLabel(today: Date = new Date()) {
   return formatKstTodayLabel(today);
 }
+
+/** Signed day count from today to `target` (both KST calendar dates) — can be negative once passed. */
+export function daysUntil(target: Date, today: Date = new Date()): number {
+  const start = kstDateOnly(today);
+  return Math.round((target.getTime() - start.getTime()) / 86400000);
+}

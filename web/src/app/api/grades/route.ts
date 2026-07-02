@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { resolveStudentId } from "@/lib/access";
-import { DEFAULT_SUBJECTS, EXAM_TYPE_LABEL, getSubjectChips, buildSubjectTrend, buildSubjectSummary } from "@/lib/grades";
+import { DEFAULT_SUBJECTS, getSubjectChips, buildSubjectTrend, buildSubjectSummary } from "@/lib/grades";
 import { examPaperDisplayTitle, maxScoreForPaperSubject } from "@/lib/examPapers";
 
 export async function GET(req: Request) {
@@ -19,6 +19,7 @@ export async function GET(req: Request) {
   const typeLabel = url.searchParams.get("type") || "전체";
 
   const subjectChips = await getSubjectChips(studentId);
+  const typeOptions = await prisma.examTypeOption.findMany({ where: { ownerId: studentId }, orderBy: { order: "asc" } });
   const all = await prisma.exam.findMany({
     where: { ownerId: studentId, subject },
     include: { examPaper: { include: { series: true } } },
@@ -26,7 +27,7 @@ export async function GET(req: Request) {
   });
   const allShaped = all.map((e) => ({
     id: e.id,
-    type: EXAM_TYPE_LABEL[e.examPaper.type],
+    type: e.examPaper.type,
     name: examPaperDisplayTitle(e.examPaper),
     date: e.examPaper.examDate,
     grade: e.grade,
@@ -39,10 +40,11 @@ export async function GET(req: Request) {
     subjectChips,
     subject,
     typeLabel,
+    typeFilters: ["전체", ...typeOptions.map((t) => t.name)],
     subjSummary: buildSubjectSummary(all.map((e) => ({ type: e.examPaper.type, grade: e.grade }))),
     subjTrend: buildSubjectTrend(
       all
-        .filter((e) => e.examPaper.type === "MOCK" || e.examPaper.type === "HAKPYUNG")
+        .filter((e) => e.examPaper.type === "모평" || e.examPaper.type === "학평")
         .map((e) => ({ date: e.examPaper.examDate, grade: e.grade })),
       620,
       160

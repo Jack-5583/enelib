@@ -7,10 +7,13 @@ import { Chip } from "@/components/ui/Chip";
 import { Sheet } from "@/components/ui/Sheet";
 import { SUBJECTS, defaultMaxScoreFor } from "@/lib/subjects";
 
-const TAGS = ["전체", "기출", "모평", "학평", "독서", "유형", "어법", "오답"];
 const BOOK_SUBJECTS = SUBJECTS.filter((s) => s !== "기타").concat("기타");
 const EXAM_SUBJECTS = SUBJECTS.filter((s) => s !== "기타");
-const EXAM_TYPES = ["모평", "학평", "내신", "사설", "수능"];
+
+interface NamedOption {
+  id: string;
+  name: string;
+}
 
 interface BookItem {
   id: string;
@@ -36,11 +39,13 @@ export function Materials() {
   const [tab, setTab] = useState<"book" | "exam">("book");
   const [query, setQuery] = useState("");
   const [tag, setTag] = useState("전체");
+  const [tags, setTags] = useState<NamedOption[]>([]);
   const [books, setBooks] = useState<BookItem[]>([]);
   const [papers, setPapers] = useState<ExamPaperItem[]>([]);
   const [addOpen, setAddOpen] = useState(false);
   const [editBook, setEditBook] = useState<BookItem | null>(null);
   const [editPaper, setEditPaper] = useState<ExamPaperItem | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<string | null>(null);
 
   function loadBooks() {
     const params = new URLSearchParams();
@@ -57,6 +62,15 @@ export function Materials() {
       .then((r) => r.json())
       .then(setPapers);
   }
+  function loadTags() {
+    fetch("/api/materials/tags")
+      .then((r) => r.json())
+      .then(setTags);
+  }
+
+  useEffect(() => {
+    loadTags();
+  }, []);
 
   useEffect(() => {
     if (tab === "book") loadBooks();
@@ -64,15 +78,34 @@ export function Materials() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, query, tag]);
 
+  function pickTab(next: "book" | "exam") {
+    setOpenActionsId(null);
+    setTab(next);
+  }
+
   async function deleteBook(id: string) {
     if (!window.confirm("이 교재를 삭제할까요? 연동된 투두의 교재 정보도 함께 사라집니다.")) return;
     await fetch(`/api/materials/books/${id}`, { method: "DELETE" });
+    setOpenActionsId(null);
     loadBooks();
   }
   async function deletePaper(id: string) {
     if (!window.confirm("이 시험지를 삭제할까요? 이 시험지로 등록된 성적도 함께 삭제됩니다.")) return;
     await fetch(`/api/materials/exam-papers/${id}`, { method: "DELETE" });
+    setOpenActionsId(null);
     loadPapers();
+  }
+  async function addTag(name: string) {
+    const res = await fetch("/api/materials/tags", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (res.ok) loadTags();
+  }
+  async function removeTag(id: string) {
+    await fetch(`/api/materials/tags/${id}`, { method: "DELETE" });
+    loadTags();
   }
 
   return (
@@ -83,7 +116,7 @@ export function Materials() {
           { id: "exam" as const, label: "시험지" },
         ]}
         value={tab}
-        onChange={setTab}
+        onChange={pickTab}
       />
 
       <div className="mt-7 flex items-center gap-2.5 rounded-[2px] border border-[#c6c6c6] px-3.5 py-3">
@@ -98,13 +131,17 @@ export function Materials() {
         />
       </div>
       {tab === "book" && (
-        <div className="scrollbar-hide flex gap-2 overflow-x-auto py-4">
-          {TAGS.map((t) => (
-            <Chip key={t} active={t === tag} onClick={() => setTag(t)} size="sm">
-              {t}
-            </Chip>
-          ))}
-        </div>
+        <TagFilterRow
+          tags={tags}
+          active={tag}
+          onSelect={setTag}
+          onAdd={addTag}
+          onRemove={(id) => {
+            const removed = tags.find((t) => t.id === id);
+            removeTag(id);
+            if (removed && removed.name === tag) setTag("전체");
+          }}
+        />
       )}
 
       {tab === "book" ? (
@@ -128,13 +165,21 @@ export function Materials() {
                     {b.publisher} · 연동 투두 {b.todoCount}개
                   </p>
                 </div>
-                <div className="flex flex-none items-center gap-3 pt-1">
-                  <button onClick={() => setEditBook(b)} className="border-none bg-none p-0 text-[13px] text-[#161616]/60 underline underline-offset-[3px]">
-                    수정
-                  </button>
-                  <button onClick={() => deleteBook(b.id)} className="border-none bg-none p-0 text-[13px] text-[#e0362f]/80 underline underline-offset-[3px]">
-                    삭제
-                  </button>
+                <div className="flex flex-none items-center gap-2.5 pt-1">
+                  {openActionsId === b.id ? (
+                    <>
+                      <button onClick={() => { setOpenActionsId(null); setEditBook(b); }} className="border-none bg-none p-0 text-[13px] text-[#161616]/60 underline underline-offset-[3px]">
+                        수정
+                      </button>
+                      <button onClick={() => deleteBook(b.id)} className="border-none bg-none p-0 text-[13px] text-[#e0362f]/80 underline underline-offset-[3px]">
+                        삭제
+                      </button>
+                    </>
+                  ) : (
+                    <button onClick={() => setOpenActionsId(b.id)} aria-label="수정·삭제" className="border-none bg-none p-1 text-[14px] text-[#161616]/40">
+                      ✎
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -172,13 +217,21 @@ export function Materials() {
                     {p.kind === "SUBJECT" && p.maxScore != null && ` · 만점 ${p.maxScore}점`}
                   </p>
                 </div>
-                <div className="flex flex-none items-center gap-3 pt-1">
-                  <button onClick={() => setEditPaper(p)} className="border-none bg-none p-0 text-[13px] text-[#161616]/60 underline underline-offset-[3px]">
-                    수정
-                  </button>
-                  <button onClick={() => deletePaper(p.id)} className="border-none bg-none p-0 text-[13px] text-[#e0362f]/80 underline underline-offset-[3px]">
-                    삭제
-                  </button>
+                <div className="flex flex-none items-center gap-2.5 pt-1">
+                  {openActionsId === p.id ? (
+                    <>
+                      <button onClick={() => { setOpenActionsId(null); setEditPaper(p); }} className="border-none bg-none p-0 text-[13px] text-[#161616]/60 underline underline-offset-[3px]">
+                        수정
+                      </button>
+                      <button onClick={() => deletePaper(p.id)} className="border-none bg-none p-0 text-[13px] text-[#e0362f]/80 underline underline-offset-[3px]">
+                        삭제
+                      </button>
+                    </>
+                  ) : (
+                    <button onClick={() => setOpenActionsId(p.id)} aria-label="수정·삭제" className="border-none bg-none p-1 text-[14px] text-[#161616]/40">
+                      ✎
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -232,6 +285,85 @@ export function Materials() {
           />
         )}
       </Sheet>
+    </div>
+  );
+}
+
+function TagFilterRow({
+  tags,
+  active,
+  onSelect,
+  onAdd,
+  onRemove,
+}: {
+  tags: NamedOption[];
+  active: string;
+  onSelect: (name: string) => void;
+  onAdd: (name: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [editMode, setEditMode] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  function submitAdd() {
+    const name = draft.trim();
+    if (!name) return;
+    onAdd(name);
+    setDraft("");
+    setAdding(false);
+  }
+
+  return (
+    <div className="flex items-center gap-2 py-4">
+      <div className="scrollbar-hide flex flex-1 items-center gap-2 overflow-x-auto">
+        <Chip active={active === "전체"} onClick={() => onSelect("전체")} size="sm">
+          전체
+        </Chip>
+        {tags.map((t) => (
+          <div key={t.id} className="relative flex-none">
+            <Chip active={active === t.name} onClick={() => onSelect(t.name)} size="sm">
+              {t.name}
+            </Chip>
+            {editMode && (
+              <button
+                onClick={() => onRemove(t.id)}
+                aria-label={`${t.name} 삭제`}
+                className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full border-none bg-[#161616] text-[10px] leading-none text-white"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        ))}
+        {editMode &&
+          (adding ? (
+            <span className="flex flex-none items-center gap-1.5">
+              <input
+                autoFocus
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submitAdd()}
+                placeholder="태그명"
+                className="w-20 border-0 border-b border-[#161616]/50 bg-transparent px-0.5 py-1 text-[13px] text-[#161616] outline-none"
+              />
+              <button onClick={submitAdd} className="border-none bg-none p-0 text-[13px] text-[#003ce0]">
+                추가
+              </button>
+            </span>
+          ) : (
+            <Chip active={false} onClick={() => setAdding(true)} size="sm">
+              + 태그
+            </Chip>
+          ))}
+      </div>
+      <button
+        onClick={() => setEditMode((v) => !v)}
+        aria-label="태그 관리"
+        className={`flex-none border-none bg-none p-1 text-[15px] ${editMode ? "text-[#161616]" : "text-[#161616]/40"}`}
+      >
+        ✎
+      </button>
     </div>
   );
 }
@@ -296,6 +428,105 @@ interface SeriesOption {
   nextRound: number;
 }
 
+function ExamTypePicker({
+  value,
+  onChange,
+  allowManage = false,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  allowManage?: boolean;
+}) {
+  const [types, setTypes] = useState<NamedOption[]>([]);
+  const [manage, setManage] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  function load() {
+    fetch("/api/materials/exam-types")
+      .then((r) => r.json())
+      .then((d: NamedOption[]) => {
+        setTypes(d);
+        if (d.length > 0 && !value) onChange(d[0].name);
+      });
+  }
+  // Only load once on mount — re-running on every `value`/`onChange` identity
+  // change would fight the user's selection.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(load, []);
+
+  async function addType() {
+    const name = draft.trim();
+    if (!name) return;
+    const res = await fetch("/api/materials/exam-types", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (res.ok) {
+      setDraft("");
+      load();
+    }
+  }
+  async function removeType(id: string) {
+    await fetch(`/api/materials/exam-types/${id}`, { method: "DELETE" });
+    load();
+  }
+
+  return (
+    <div className="mb-5">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="m-0 text-[13px] leading-5 font-semibold text-[#161616]">시험 종류</p>
+        {allowManage && (
+          <button
+            onClick={() => setManage((v) => !v)}
+            aria-label="종류 관리"
+            className={`border-none bg-none p-1 text-[14px] ${manage ? "text-[#161616]" : "text-[#161616]/40"}`}
+          >
+            ✎
+          </button>
+        )}
+      </div>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none">
+        {types.map((t) => (
+          <option key={t.id} value={t.name}>
+            {t.name}
+          </option>
+        ))}
+      </select>
+      {manage && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {types.map((t) => (
+            <span key={t.id} className="relative inline-flex">
+              <Chip active={false} size="sm">
+                {t.name}
+              </Chip>
+              <button
+                onClick={() => removeType(t.id)}
+                aria-label={`${t.name} 삭제`}
+                className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full border-none bg-[#161616] text-[10px] leading-none text-white"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <span className="flex items-center gap-1.5">
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addType()}
+              placeholder="새 종류"
+              className="w-20 border-0 border-b border-[#161616]/50 bg-transparent px-0.5 py-1 text-[13px] text-[#161616] outline-none"
+            />
+            <button onClick={addType} className="border-none bg-none p-0 text-[13px] text-[#003ce0]">
+              추가
+            </button>
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ExamPaperForm({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
   const [kind, setKind] = useState<"SUBJECT" | "FULL">("SUBJECT");
   const [subject, setSubject] = useState(EXAM_SUBJECTS[0]);
@@ -307,7 +538,7 @@ function ExamPaperForm({ onDone, onCancel }: { onDone: () => void; onCancel: () 
   const [round, setRound] = useState("");
   const [maxScore, setMaxScore] = useState(String(defaultMaxScoreFor(EXAM_SUBJECTS[0])));
   const [fullSubjects, setFullSubjects] = useState<Record<string, number | null>>({});
-  const [type, setType] = useState(EXAM_TYPES[0]);
+  const [type, setType] = useState("");
   const [examDate, setExamDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -349,6 +580,10 @@ function ExamPaperForm({ onDone, onCancel }: { onDone: () => void; onCancel: () 
 
   async function submit() {
     setError(null);
+    if (!type) {
+      setError("시험 종류를 선택해 주세요.");
+      return;
+    }
     if (!examDate.trim()) {
       setError("응시일을 입력해 주세요.");
       return;
@@ -513,14 +748,7 @@ function ExamPaperForm({ onDone, onCancel }: { onDone: () => void; onCancel: () 
         </>
       )}
 
-      <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">시험 종류</p>
-      <select value={type} onChange={(e) => setType(e.target.value)} className="mb-5 w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none">
-        {EXAM_TYPES.map((t) => (
-          <option key={t} value={t}>
-            {t}
-          </option>
-        ))}
-      </select>
+      <ExamTypePicker value={type} onChange={setType} allowManage />
 
       <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">응시일</p>
       <input value={examDate} onChange={(e) => setExamDate(e.target.value)} placeholder="26.06.04" className="mb-8 w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none" />
@@ -582,14 +810,7 @@ function ExamPaperEditForm({ paper, onDone, onCancel }: { paper: ExamPaperItem; 
         </>
       )}
 
-      <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">시험 종류</p>
-      <select value={type} onChange={(e) => setType(e.target.value)} className="mb-5 w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none">
-        {EXAM_TYPES.map((t) => (
-          <option key={t} value={t}>
-            {t}
-          </option>
-        ))}
-      </select>
+      <ExamTypePicker value={type} onChange={setType} />
 
       <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">응시일</p>
       <input value={examDate} onChange={(e) => setExamDate(e.target.value)} className="mb-5 w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none" />

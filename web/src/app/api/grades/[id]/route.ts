@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-import { EXAM_TYPE_LABEL } from "@/lib/grades";
 import { examPaperDisplayTitle } from "@/lib/examPapers";
 
 async function canRead(userId: string, role: "STUDENT" | "PARENT", ownerId: string) {
@@ -27,7 +26,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json({
     id: exam.id,
     subject: exam.subject,
-    type: EXAM_TYPE_LABEL[exam.examPaper.type],
+    type: exam.examPaper.type,
     name: examPaperDisplayTitle(exam.examPaper),
     date: exam.examPaper.examDate,
     grade: exam.grade,

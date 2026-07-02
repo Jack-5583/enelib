@@ -1,6 +1,5 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { EXAM_TYPE_LABEL } from "@/lib/grades";
 
 export function roundLabel(round: number): string {
   return `${String(round).padStart(2, "0")}회`;
@@ -48,7 +47,7 @@ export function examPaperListItemDTO(paper: PaperListShape) {
     subject: paper.subject,
     title: examPaperDisplayTitle(paper),
     isSeries: !!paper.series,
-    type: EXAM_TYPE_LABEL[paper.type],
+    type: paper.type,
     examDate: paper.examDate,
     maxScore: paper.maxScore,
     subjects: paper.subjects.map((s) => ({ subject: s.subject, maxScore: s.maxScore })),

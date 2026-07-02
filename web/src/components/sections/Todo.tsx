@@ -35,13 +35,31 @@ function shiftIso(iso: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
+interface WeekTodo {
+  id: string;
+  subject: string;
+  title: string;
+  done: boolean;
+  materialLabel: string | null;
+}
+interface WeekDay {
+  day: string;
+  date: string;
+  iso: string;
+  done: number;
+  total: number;
+  today: boolean;
+  todos: WeekTodo[];
+}
+
 export function Todo() {
   const [tab, setTab] = useState<"daily" | "weekly">("daily");
   const [viewDate, setViewDate] = useState(todayIso());
   const [todayLabel, setTodayLabel] = useState("");
   const [isToday, setIsToday] = useState(true);
   const [todos, setTodos] = useState<TodoItem[]>([]);
-  const [week, setWeek] = useState<{ weekLabel: string; days: { day: string; date: string; done: number; total: number; today: boolean }[] } | null>(null);
+  const [openActionsId, setOpenActionsId] = useState<string | null>(null);
+  const [week, setWeek] = useState<{ weekLabel: string; days: WeekDay[] } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<TodoItem | null>(null);
   const [books, setBooks] = useState<BookOption[]>([]);
@@ -84,6 +102,26 @@ export function Todo() {
     });
   }
 
+  async function toggleWeekTodo(id: string, current: boolean) {
+    setWeek((w) =>
+      w
+        ? {
+            ...w,
+            days: w.days.map((d) => ({
+              ...d,
+              todos: d.todos.map((t) => (t.id === id ? { ...t, done: !current } : t)),
+              done: d.todos.some((t) => t.id === id) ? d.done + (current ? -1 : 1) : d.done,
+            })),
+          }
+        : w
+    );
+    await fetch(`/api/todos/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ done: !current }),
+    });
+  }
+
   async function ensureBooksLoaded() {
     if (books.length === 0) {
       const list = await fetch("/api/materials/books").then((r) => r.json());
@@ -93,14 +131,18 @@ export function Todo() {
     return books;
   }
 
-  function openAdd() {
+  function openAddForDate(forDate: string) {
     setSubject(SUBJECTS[0]);
     setTitle("");
     setBookId("");
-    setDate(viewDate);
+    setDate(forDate);
     ensureBooksLoaded();
     setEditing(null);
     setAddOpen(true);
+  }
+
+  function openAdd() {
+    openAddForDate(viewDate);
   }
 
   async function openEdit(t: TodoItem) {
@@ -171,15 +213,15 @@ export function Todo() {
         <>
           <div className="flex items-center justify-between pt-8 lg:pt-10">
             <div className="flex items-center gap-2.5">
-              <button onClick={() => setViewDate((d) => shiftIso(d, -1))} aria-label="전날" className="border-none bg-none p-1 text-[16px] text-[#161616]/50">
+              <button onClick={() => { setOpenActionsId(null); setViewDate((d) => shiftIso(d, -1)); }} aria-label="전날" className="border-none bg-none p-1 text-[16px] text-[#161616]/50">
                 ‹
               </button>
               <p className="m-0 text-[15px] leading-6 text-[#161616]/60 lg:text-[16px]">{todayLabel}</p>
-              <button onClick={() => setViewDate((d) => shiftIso(d, 1))} aria-label="다음날" className="border-none bg-none p-1 text-[16px] text-[#161616]/50">
+              <button onClick={() => { setOpenActionsId(null); setViewDate((d) => shiftIso(d, 1)); }} aria-label="다음날" className="border-none bg-none p-1 text-[16px] text-[#161616]/50">
                 ›
               </button>
               {!isToday && (
-                <button onClick={() => setViewDate(todayIso())} className="border-none bg-none p-0 text-[13px] text-[#003ce0] underline underline-offset-[3px]">
+                <button onClick={() => { setOpenActionsId(null); setViewDate(todayIso()); }} className="border-none bg-none p-0 text-[13px] text-[#003ce0] underline underline-offset-[3px]">
                   오늘로
                 </button>
               )}
@@ -207,12 +249,20 @@ export function Todo() {
                     )}
                   </div>
                   <div className="flex flex-none items-center gap-2.5">
-                    <button onClick={() => openEdit(t)} className="border-none bg-none p-0 text-[12px] text-[#161616]/50 underline underline-offset-[3px] lg:text-[13px]">
-                      수정
-                    </button>
-                    <button onClick={() => deleteTodo(t.id)} className="border-none bg-none p-0 text-[12px] text-[#e0362f]/80 underline underline-offset-[3px] lg:text-[13px]">
-                      삭제
-                    </button>
+                    {openActionsId === t.id ? (
+                      <>
+                        <button onClick={() => { setOpenActionsId(null); openEdit(t); }} className="border-none bg-none p-0 text-[12px] text-[#161616]/50 underline underline-offset-[3px] lg:text-[13px]">
+                          수정
+                        </button>
+                        <button onClick={() => deleteTodo(t.id)} className="border-none bg-none p-0 text-[12px] text-[#e0362f]/80 underline underline-offset-[3px] lg:text-[13px]">
+                          삭제
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => setOpenActionsId(t.id)} aria-label="수정·삭제" className="border-none bg-none p-1 text-[13px] text-[#161616]/40">
+                        ✎
+                      </button>
+                    )}
                   </div>
                 </div>
                 <p className={`m-0 mb-1.5 text-[15px] leading-6 lg:text-[16px] lg:leading-7 ${t.done ? "text-[#161616]/40 line-through" : "text-[#161616]"}`}>
@@ -230,27 +280,34 @@ export function Todo() {
             <div className="border-b border-[#161616]/96 pt-8 pb-4 lg:pt-10 lg:pb-5">
               <p className="m-0 text-[18px] leading-7 font-semibold text-[#161616] lg:text-[20px] lg:leading-8">{week.weekLabel}</p>
             </div>
-            {week.days.map((d) => {
-              const pct = d.total ? Math.round((d.done / d.total) * 100) : 0;
-              return (
-                <div key={d.date} className="flex items-center gap-3 border-b border-[#16161614] py-[15px] lg:gap-4 lg:py-[18px]">
-                  <div className="w-[58px] flex-none lg:w-[70px]">
-                    <span className={`text-[15px] lg:text-[16px] lg:leading-7 ${d.today ? "text-[#161616]" : "text-[#161616]/50"}`}>{d.day}</span>
-                    <span className="ml-1.5 text-[12px] text-[#161616]/40 lg:text-[14px]">{d.date}</span>
+            {week.days.map((d) => (
+              <div key={d.iso} className="border-b border-[#16161614] py-4 lg:py-5">
+                <div className="mb-2.5 flex items-baseline justify-between">
+                  <p className={`m-0 text-[15px] leading-6 lg:text-[16px] ${d.today ? "font-semibold text-[#161616]" : "text-[#161616]/70"}`}>
+                    {d.day}
+                    <span className="ml-1.5 text-[12px] font-normal text-[#161616]/40 lg:text-[13px]">{d.date}</span>
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[12px] text-[#161616]/40 lg:text-[13px]">
+                      {d.done} / {d.total}
+                    </span>
+                    <button onClick={() => openAddForDate(d.iso)} className="border-none bg-none p-0 text-[12px] text-[#161616] underline underline-offset-[3px] lg:text-[13px]">
+                      + 추가
+                    </button>
                   </div>
-                  <span className="relative h-[6px] flex-1 overflow-hidden bg-[#e2e2e2]">
-                    <span className="absolute top-0 left-0 h-full bg-[#161616]" style={{ width: `${pct}%` }} />
-                  </span>
-                  <span
-                    className={`w-11 flex-none text-right text-[15px] lg:w-14 lg:text-[20px] lg:leading-8 ${
-                      d.today ? "font-semibold text-[#161616]" : "font-normal text-[#161616]/70"
-                    }`}
-                  >
-                    {d.done} / {d.total}
-                  </span>
                 </div>
-              );
-            })}
+                {d.todos.map((t) => (
+                  <div key={t.id} className="flex items-center gap-3 py-1.5">
+                    <CheckBox checked={t.done} onClick={() => toggleWeekTodo(t.id, t.done)} />
+                    <Badge>{t.subject}</Badge>
+                    <p className={`m-0 min-w-0 flex-1 truncate text-[14px] leading-6 lg:text-[15px] ${t.done ? "text-[#161616]/40 line-through" : "text-[#161616]"}`}>
+                      {t.title}
+                    </p>
+                  </div>
+                ))}
+                {d.todos.length === 0 && <p className="m-0 py-1.5 text-[13px] text-[#161616]/30">등록된 투두가 없습니다.</p>}
+              </div>
+            ))}
             <p className="m-0 pt-5 text-[13px] leading-5 text-[#161616]/50 lg:text-[14px] lg:leading-6">
               * 교재의 Day 단위를 주간 투두로 등록하면 매일 자동으로 데일리 투두에 배치됩니다.
             </p>

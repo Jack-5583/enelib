@@ -61,6 +61,8 @@ export function Settings({ role }: { role: Role }) {
           </div>
         ))}
 
+      {role === "STUDENT" && <DdaySection />}
+
       {role === "STUDENT" ? <StudentLinkSection /> : <ParentLinkSection />}
 
       <div className="pt-6">
@@ -69,6 +71,102 @@ export function Settings({ role }: { role: Role }) {
         </button>
       </div>
     </div>
+  );
+}
+
+interface DdayItem {
+  id: string;
+  label: string;
+  targetLabel: string;
+  dday: number;
+}
+
+function DdaySection() {
+  const [ddays, setDdays] = useState<DdayItem[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [label, setLabel] = useState("");
+  const [targetDate, setTargetDate] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  function load() {
+    fetch("/api/settings/ddays")
+      .then((r) => r.json())
+      .then(setDdays);
+  }
+  useEffect(load, []);
+
+  async function submit() {
+    if (!label.trim() || !targetDate || saving) return;
+    setSaving(true);
+    await fetch("/api/settings/ddays", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: label.trim(), targetDate }),
+    });
+    setSaving(false);
+    setLabel("");
+    setTargetDate("");
+    setAdding(false);
+    load();
+  }
+
+  async function remove(id: string) {
+    await fetch(`/api/settings/ddays/${id}`, { method: "DELETE" });
+    load();
+  }
+
+  return (
+    <>
+      <div className="flex items-baseline justify-between border-b border-[#161616]/96 pt-11 pb-4 lg:pt-11 lg:pb-5">
+        <p className="m-0 text-[18px] leading-7 font-semibold text-[#161616] lg:text-[20px] lg:leading-8">디데이 관리</p>
+        <button onClick={() => setAdding((v) => !v)} className="border-none bg-none p-0 text-[14px] text-[#161616] underline underline-offset-[3px] lg:text-[16px]">
+          + 디데이 추가
+        </button>
+      </div>
+      {ddays.map((d) => (
+        <div key={d.id} className="flex items-center justify-between gap-4 border-b border-[#16161614] py-4 lg:py-5">
+          <div>
+            <p className="m-0 text-[15px] leading-6 text-[#161616] lg:text-[16px] lg:leading-7">{d.label}</p>
+            <p className="m-0 text-[12px] leading-5 text-[#161616]/50 lg:text-[14px] lg:leading-6">{d.targetLabel}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-[20px] leading-7 font-light text-[#161616] lg:text-[22px]">D-{d.dday}</span>
+            <button onClick={() => remove(d.id)} className="border-none bg-none p-0 text-[13px] text-[#161616]/50 underline underline-offset-[3px]">
+              삭제
+            </button>
+          </div>
+        </div>
+      ))}
+      {ddays.length === 0 && !adding && (
+        <p className="m-0 py-4 text-[13px] text-[#161616]/40 lg:py-5">등록된 디데이가 없습니다.</p>
+      )}
+      {adding && (
+        <div className="border-b border-[#16161614] py-4 lg:py-5">
+          <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">이름</p>
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="예) 중간고사"
+            className="mb-4 w-full border-0 border-b border-[#161616]/50 bg-transparent py-2.5 text-[15px] text-[#161616] outline-none"
+          />
+          <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">날짜</p>
+          <input
+            type="date"
+            value={targetDate}
+            onChange={(e) => setTargetDate(e.target.value)}
+            className="mb-4 w-full border-0 border-b border-[#161616]/50 bg-transparent py-2.5 text-[15px] text-[#161616] outline-none"
+          />
+          <div className="flex gap-2.5">
+            <button onClick={() => setAdding(false)} className="w-[88px] flex-none rounded-[2px] border border-[#161616] bg-white py-3 text-[14px] font-medium text-[#161616]">
+              취소
+            </button>
+            <button onClick={submit} disabled={saving || !label.trim() || !targetDate} className="flex-1 rounded-[2px] border-none bg-[#161616] py-3 text-[15px] font-semibold text-white disabled:opacity-50">
+              추가하기
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

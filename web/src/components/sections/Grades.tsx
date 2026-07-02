@@ -5,8 +5,6 @@ import { Chip } from "@/components/ui/Chip";
 import { Badge } from "@/components/ui/Badge";
 import { Sheet } from "@/components/ui/Sheet";
 
-const TYPE_FILTERS = ["전체", "모평", "학평", "내신", "사설"];
-
 interface ExamPaperCandidate {
   id: string;
   title: string;
@@ -19,6 +17,7 @@ interface GradesData {
   subjectChips: string[];
   subject: string;
   typeLabel: string;
+  typeFilters: string[];
   subjSummary: { latest: number | null; best: number | null; count: number; deltaLabel: string };
   subjTrend: { W: number; H: number; points: string; dots: { cx: string; cy: string; label: string }[] };
   exams: { id: string; type: string; name: string; date: string; grade: number; raw: number; pct: number | null }[];
@@ -117,7 +116,7 @@ export function Grades({ studentId, readOnly = false, contextLabel }: { studentI
       </div>
 
       <div className="flex items-center gap-2 pt-6 pb-1">
-        {TYPE_FILTERS.map((t) => (
+        {data.typeFilters.map((t) => (
           <Chip key={t} active={t === data.typeLabel} onClick={() => pickType(t)} size="sm">
             {t}
           </Chip>

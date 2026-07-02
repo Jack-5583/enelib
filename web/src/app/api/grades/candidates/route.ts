@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-import { EXAM_TYPE_LABEL } from "@/lib/grades";
 import { examPaperDisplayTitle } from "@/lib/examPapers";
 
 export async function GET(req: Request) {
@@ -31,7 +30,7 @@ export async function GET(req: Request) {
     .map((p) => ({
       id: p.id,
       title: examPaperDisplayTitle(p),
-      type: EXAM_TYPE_LABEL[p.type],
+      type: p.type,
       examDate: p.examDate,
       maxScore: p.kind === "SUBJECT" ? p.maxScore : p.subjects.find((s) => s.subject === subject)?.maxScore ?? null,
     }));

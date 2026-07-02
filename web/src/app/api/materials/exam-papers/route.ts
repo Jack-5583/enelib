@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-import { EXAM_TYPE_FROM_LABEL } from "@/lib/grades";
 import { examPaperListItemDTO } from "@/lib/examPapers";
 
 export async function GET(req: Request) {
@@ -29,7 +28,7 @@ export async function GET(req: Request) {
 const subjectPayload = z.object({
   kind: z.literal("SUBJECT"),
   subject: z.string().min(1),
-  type: z.enum(["모평", "학평", "내신", "사설", "수능"]),
+  type: z.string().min(1),
   examDate: z.string().min(1),
   maxScore: z.number().int().min(1).max(999),
   mode: z.enum(["standalone", "series"]),
@@ -42,7 +41,7 @@ const subjectPayload = z.object({
 const fullPayload = z.object({
   kind: z.literal("FULL"),
   title: z.string().min(1),
-  type: z.enum(["모평", "학평", "내신", "사설", "수능"]),
+  type: z.string().min(1),
   examDate: z.string().min(1),
   subjects: z.array(z.object({ subject: z.string().min(1), maxScore: z.number().int().min(1).max(999) })).min(1),
 });
@@ -56,7 +55,7 @@ export async function POST(req: Request) {
   const parsed = createSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
   const data = parsed.data;
-  const type = EXAM_TYPE_FROM_LABEL[data.type] as never;
+  const type = data.type;
 
   if (data.kind === "FULL") {
     const paper = await prisma.examPaper.create({

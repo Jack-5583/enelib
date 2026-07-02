@@ -23,19 +23,34 @@ export async function GET(req: Request) {
     const { start, end } = weekRange(now).dateOnly;
     const todos = await prisma.todo.findMany({
       where: { ownerId: user.id, date: { gte: start, lt: end } },
-      orderBy: { date: "asc" },
+      include: { book: true },
+      orderBy: { createdAt: "asc" },
     });
     const today = kstDateOnly(now);
-    const buckets: { date: Date; day: string; done: number; total: number; today: boolean }[] = [];
+    const buckets: {
+      date: Date;
+      day: string;
+      done: number;
+      total: number;
+      today: boolean;
+      todos: { id: string; subject: string; title: string; done: boolean; materialLabel: string | null }[];
+    }[] = [];
     for (let i = 0; i < 7; i++) {
       const d = addDaysToDateOnly(start, i);
-      buckets.push({ date: d, day: kstWeekdayLabel(d), done: 0, total: 0, today: today.getTime() === d.getTime() });
+      buckets.push({ date: d, day: kstWeekdayLabel(d), done: 0, total: 0, today: today.getTime() === d.getTime(), todos: [] });
     }
     for (const t of todos) {
       const idx = Math.round((t.date.getTime() - start.getTime()) / 86400000);
       if (buckets[idx]) {
         buckets[idx].total += 1;
         if (t.done) buckets[idx].done += 1;
+        buckets[idx].todos.push({
+          id: t.id,
+          subject: t.subject,
+          title: t.title,
+          done: t.done,
+          materialLabel: t.materialLabel || t.book?.title || null,
+        });
       }
     }
     return NextResponse.json({
@@ -43,9 +58,11 @@ export async function GET(req: Request) {
       days: buckets.map((b) => ({
         day: b.day,
         date: formatKstMonthDay(b.date),
+        iso: b.date.toISOString().slice(0, 10),
         done: b.done,
         total: b.total,
         today: b.today,
+        todos: b.todos,
       })),
     });
   }
