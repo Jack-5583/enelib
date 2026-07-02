@@ -2,15 +2,18 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-import { kstMidnightInstant, formatKstHm } from "@/lib/kst";
+import { kstMidnightInstant, addDaysToInstant, formatKstHm } from "@/lib/kst";
 
-export async function GET() {
+export async function GET(req: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  const start = kstMidnightInstant();
+  const dateParam = new URL(req.url).searchParams.get("date");
+  const start = kstMidnightInstant(dateParam ? new Date(dateParam) : new Date());
+  const end = addDaysToInstant(start, 1);
+
   const entries = await prisma.timelineEntry.findMany({
-    where: { ownerId: user.id, capturedAt: { gte: start } },
+    where: { ownerId: user.id, capturedAt: { gte: start, lt: end } },
     include: { memo: true },
     orderBy: { capturedAt: "asc" },
   });
@@ -23,7 +26,7 @@ export async function GET() {
       dur: e.durationLabel,
       subject: e.subject,
       title: e.todoTitle,
-      photoUrl: e.photoUrl,
+      photoUrls: e.photoUrls,
       hasMemo: !!e.memo,
       memoUrl: e.memo?.dataUrl || null,
     }))
@@ -35,7 +38,7 @@ const schema = z.object({
   subject: z.string().optional(),
   todoTitle: z.string().optional(),
   durationLabel: z.string().optional(),
-  photoUrl: z.string().optional(),
+  photoUrls: z.array(z.string()).default([]),
   segmentStart: z.string().optional(),
 });
 
@@ -53,7 +56,7 @@ export async function POST(req: Request) {
       subject: parsed.data.subject || null,
       todoTitle: parsed.data.todoTitle || null,
       durationLabel: parsed.data.durationLabel || null,
-      photoUrl: parsed.data.photoUrl || null,
+      photoUrls: parsed.data.photoUrls,
       capturedAt: parsed.data.segmentStart ? new Date(parsed.data.segmentStart) : new Date(),
       endedAt: new Date(),
     },

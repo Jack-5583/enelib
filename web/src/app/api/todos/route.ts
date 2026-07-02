@@ -50,14 +50,16 @@ export async function GET(req: Request) {
     });
   }
 
-  const today = kstDateOnly(now);
+  const dateParam = new URL(req.url).searchParams.get("date");
+  const target = dateParam ? kstDateOnly(new Date(dateParam)) : kstDateOnly(now);
   const todos = await prisma.todo.findMany({
-    where: { ownerId: user.id, date: today },
+    where: { ownerId: user.id, date: target },
     include: { book: true },
     orderBy: { createdAt: "asc" },
   });
   return NextResponse.json({
-    todayLabel: formatKstTodayLabel(now),
+    todayLabel: formatKstTodayLabel(target),
+    isToday: target.getTime() === kstDateOnly(now).getTime(),
     todos: todos.map((t) => ({
       id: t.id,
       subject: t.subject,

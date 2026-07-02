@@ -35,7 +35,7 @@ export async function GET() {
       time: formatKstHm(e.capturedAt),
       subject: e.subject,
       title: e.todoTitle,
-      photoUrl: e.memo?.dataUrl || e.photoUrl,
+      photoUrl: e.memo?.dataUrl || e.photoUrls[0] || null,
     })),
   });
 }

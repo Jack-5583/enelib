@@ -1,7 +1,8 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { SUBJECTS } from "@/lib/subjects";
 
-export const DEFAULT_SUBJECTS = ["국어", "수학", "영어", "생명과학1", "지구과학1"];
+export const DEFAULT_SUBJECTS = SUBJECTS.filter((s) => s !== "기타");
 export const EXAM_TYPES = ["MOCK", "HAKPYUNG", "NAESIN", "PRIVATE", "CSAT"] as const;
 export const EXAM_TYPE_LABEL: Record<string, string> = {
   MOCK: "모평",

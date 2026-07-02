@@ -24,6 +24,11 @@ enum ExamType {
   CSAT   // 수능
 }
 
+enum ExamPaperKind {
+  FULL    // 풀 모의고사 (전과목)
+  SUBJECT // 과목별 모의고사
+}
+
 enum VerificationPurpose {
   LOGIN
   SIGNUP
@@ -49,6 +54,7 @@ model User {
   // student-owned data
   books        Book[]
   examPapers   ExamPaper[]
+  examSeries   ExamSeries[]
   todos        Todo[]
   exams        Exam[]
   camSessions  CamSession[]
@@ -144,17 +150,55 @@ model Book {
   @@index([ownerId])
 }
 
-model ExamPaper {
+/// A named, ongoing set of subject-specific mock exams a student takes
+/// repeatedly (e.g. "시대인재 모의고사"), registered one round at a time.
+model ExamSeries {
   id        String   @id @default(cuid())
   ownerId   String
   owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   subject   String
-  title     String
-  tag       String
-  examDate  String
+  name      String
   createdAt DateTime @default(now())
 
+  papers ExamPaper[]
+
+  @@unique([ownerId, subject, name])
+  @@index([ownerId, subject])
+}
+
+model ExamPaper {
+  id        String        @id @default(cuid())
+  ownerId   String
+  owner     User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  kind      ExamPaperKind
+  // SUBJECT kind only:
+  subject   String?
+  seriesId  String?
+  series    ExamSeries?   @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  round     Int?
+  maxScore  Int?
+  // shared:
+  title     String
+  type      ExamType
+  examDate  String
+  createdAt DateTime      @default(now())
+
+  // FULL kind only:
+  subjects ExamPaperSubject[]
+  exams    Exam[]
+
   @@index([ownerId])
+}
+
+/// Per-subject max score for a FULL (전과목) exam paper.
+model ExamPaperSubject {
+  id          String    @id @default(cuid())
+  examPaperId String
+  examPaper   ExamPaper @relation(fields: [examPaperId], references: [id], onDelete: Cascade)
+  subject     String
+  maxScore    Int
+
+  @@unique([examPaperId, subject])
 }
 
 model Todo {
@@ -176,21 +220,21 @@ model Todo {
 }
 
 model Exam {
-  id        String   @id @default(cuid())
-  ownerId   String
-  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  subject   String
-  type      ExamType
-  name      String
-  date      String
-  raw       Int
-  grade     Int
-  pct       Int?
-  std       Int?
-  wrong     String[]
-  memo      String?
-  createdAt DateTime @default(now())
+  id          String    @id @default(cuid())
+  ownerId     String
+  owner       User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  examPaperId String
+  examPaper   ExamPaper @relation(fields: [examPaperId], references: [id], onDelete: Cascade)
+  subject     String
+  raw         Int
+  grade       Int
+  pct         Int?
+  std         Int?
+  wrong       String[]
+  memo        String?
+  createdAt   DateTime  @default(now())
 
+  @@unique([examPaperId, subject])
   @@index([ownerId, subject])
 }
 
@@ -219,7 +263,7 @@ model TimelineEntry {
   subject       String?
   todoTitle     String?
   durationLabel String?
-  photoUrl      String?
+  photoUrls     String[] @default([])
   createdAt     DateTime @default(now())
 
   memo TimelineMemo?

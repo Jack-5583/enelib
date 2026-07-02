@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { EXAM_TYPE_LABEL } from "@/lib/grades";
+import { examPaperDisplayTitle } from "@/lib/examPapers";
 
 async function canRead(userId: string, role: "STUDENT" | "PARENT", ownerId: string) {
   if (userId === ownerId) return true;
@@ -18,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  const exam = await prisma.exam.findUnique({ where: { id } });
+  const exam = await prisma.exam.findUnique({ where: { id }, include: { examPaper: { include: { series: true } } } });
   if (!exam || !(await canRead(user.id, user.role, exam.ownerId))) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
@@ -26,9 +27,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json({
     id: exam.id,
     subject: exam.subject,
-    type: EXAM_TYPE_LABEL[exam.type],
-    name: exam.name,
-    date: exam.date,
+    type: EXAM_TYPE_LABEL[exam.examPaper.type],
+    name: examPaperDisplayTitle(exam.examPaper),
+    date: exam.examPaper.examDate,
     grade: exam.grade,
     raw: exam.raw,
     pct: exam.pct,
