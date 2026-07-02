@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { kstDateOnly, kstMidnightInstant, kstParts, addDaysToDateOnly, addDaysToInstant } from "@/lib/kst";
+import { examPaperDisplayTitle } from "@/lib/examPapers";
 
 /** Monday-start KST week containing `d`, as two representations:
  * - `dateOnly`: for filtering `@db.Date` columns (e.g. Todo.date)
@@ -37,7 +38,7 @@ export async function computeDashboardStats(userId: string, now: Date = new Date
     prisma.todo.findMany({ where: { ownerId: userId, date: { gte: weekDates.start, lt: weekDates.end } } }),
     prisma.todo.findMany({
       where: { ownerId: userId, date: today },
-      include: { book: true },
+      include: { book: true, examPaper: { include: { series: true } } },
       orderBy: { createdAt: "asc" },
     }),
     prisma.camSession.findMany({ where: { ownerId: userId } }),
@@ -97,7 +98,7 @@ export async function computeDashboardStats(userId: string, now: Date = new Date
       subject: t.subject,
       title: t.title,
       done: t.done,
-      materialLabel: t.materialLabel || t.book?.title || null,
+      materialLabel: t.materialLabel || t.book?.title || (t.examPaper ? examPaperDisplayTitle(t.examPaper) : null),
     })),
     doneCount: todayTodos.filter((t) => t.done).length,
     totalCount: todayTodos.length,

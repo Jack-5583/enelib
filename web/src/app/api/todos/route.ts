@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { weekRange } from "@/lib/stats";
+import { examPaperDisplayTitle } from "@/lib/examPapers";
 import {
   kstDateOnly,
   addDaysToDateOnly,
@@ -23,7 +24,7 @@ export async function GET(req: Request) {
     const { start, end } = weekRange(now).dateOnly;
     const todos = await prisma.todo.findMany({
       where: { ownerId: user.id, date: { gte: start, lt: end } },
-      include: { book: true },
+      include: { book: true, examPaper: { include: { series: true } } },
       orderBy: { createdAt: "asc" },
     });
     const today = kstDateOnly(now);
@@ -49,7 +50,7 @@ export async function GET(req: Request) {
           subject: t.subject,
           title: t.title,
           done: t.done,
-          materialLabel: t.materialLabel || t.book?.title || null,
+          materialLabel: t.materialLabel || t.book?.title || (t.examPaper ? examPaperDisplayTitle(t.examPaper) : null),
         });
       }
     }
@@ -71,7 +72,7 @@ export async function GET(req: Request) {
   const target = dateParam ? kstDateOnly(new Date(dateParam)) : kstDateOnly(now);
   const todos = await prisma.todo.findMany({
     where: { ownerId: user.id, date: target },
-    include: { book: true },
+    include: { book: true, examPaper: { include: { series: true } } },
     orderBy: { createdAt: "asc" },
   });
   return NextResponse.json({
@@ -85,7 +86,8 @@ export async function GET(req: Request) {
       memo: t.memo,
       photoUrl: t.photoUrl,
       bookId: t.bookId,
-      materialLabel: t.materialLabel || t.book?.title || null,
+      examPaperId: t.examPaperId,
+      materialLabel: t.materialLabel || t.book?.title || (t.examPaper ? examPaperDisplayTitle(t.examPaper) : null),
     })),
   });
 }
@@ -95,6 +97,7 @@ const createSchema = z.object({
   title: z.string().min(1),
   date: z.string().optional(),
   bookId: z.string().optional(),
+  examPaperId: z.string().optional(),
   materialLabel: z.string().optional(),
 });
 
@@ -116,6 +119,7 @@ export async function POST(req: Request) {
       title: parsed.data.title,
       date,
       bookId: parsed.data.bookId || null,
+      examPaperId: parsed.data.examPaperId || null,
       materialLabel: parsed.data.materialLabel || null,
     },
   });

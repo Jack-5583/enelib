@@ -222,6 +222,7 @@ model ExamPaper {
   // FULL kind only:
   subjects ExamPaperSubject[]
   exams    Exam[]
+  todos    Todo[]
 
   @@index([ownerId])
 }
@@ -247,6 +248,8 @@ model Todo {
   done       Boolean   @default(false)
   bookId     String?
   book       Book?     @relation(fields: [bookId], references: [id], onDelete: SetNull)
+  examPaperId String?
+  examPaper   ExamPaper? @relation(fields: [examPaperId], references: [id], onDelete: SetNull)
   materialLabel String?
   memo       String?
   photoUrl   String?

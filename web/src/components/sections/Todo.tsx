@@ -15,6 +15,7 @@ interface TodoItem {
   memo: string | null;
   photoUrl: string | null;
   bookId: string | null;
+  examPaperId: string | null;
   materialLabel: string | null;
 }
 
@@ -22,6 +23,13 @@ interface BookOption {
   id: string;
   title: string;
   subject: string;
+}
+
+interface ExamPaperOption {
+  id: string;
+  title: string;
+  kind: "FULL" | "SUBJECT";
+  subject: string | null;
 }
 
 function todayIso() {
@@ -63,10 +71,11 @@ export function Todo() {
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<TodoItem | null>(null);
   const [books, setBooks] = useState<BookOption[]>([]);
+  const [examPapers, setExamPapers] = useState<ExamPaperOption[]>([]);
 
   const [subject, setSubject] = useState(SUBJECTS[0]);
   const [title, setTitle] = useState("");
-  const [bookId, setBookId] = useState("");
+  const [linkValue, setLinkValue] = useState("");
   const [date, setDate] = useState(todayIso());
   const [saving, setSaving] = useState(false);
 
@@ -122,21 +131,23 @@ export function Todo() {
     });
   }
 
-  async function ensureBooksLoaded() {
-    if (books.length === 0) {
-      const list = await fetch("/api/materials/books").then((r) => r.json());
-      setBooks(list);
-      return list as BookOption[];
+  async function ensureMaterialsLoaded() {
+    if (books.length === 0 && examPapers.length === 0) {
+      const [bookList, paperList] = await Promise.all([
+        fetch("/api/materials/books").then((r) => r.json()),
+        fetch("/api/materials/exam-papers").then((r) => r.json()),
+      ]);
+      setBooks(bookList);
+      setExamPapers(paperList);
     }
-    return books;
   }
 
   function openAddForDate(forDate: string) {
     setSubject(SUBJECTS[0]);
     setTitle("");
-    setBookId("");
+    setLinkValue("");
     setDate(forDate);
-    ensureBooksLoaded();
+    ensureMaterialsLoaded();
     setEditing(null);
     setAddOpen(true);
   }
@@ -148,28 +159,34 @@ export function Todo() {
   async function openEdit(t: TodoItem) {
     setSubject(t.subject);
     setTitle(t.title);
-    setBookId(t.bookId || "");
+    setLinkValue(t.bookId ? `book:${t.bookId}` : t.examPaperId ? `paper:${t.examPaperId}` : "");
     setDate(viewDate);
-    await ensureBooksLoaded();
+    await ensureMaterialsLoaded();
     setEditing(t);
     setAddOpen(true);
+  }
+
+  function resolveLink() {
+    if (linkValue.startsWith("book:")) {
+      const book = books.find((b) => b.id === linkValue.slice(5));
+      return { bookId: book?.id || null, examPaperId: null, materialLabel: book?.title || null };
+    }
+    if (linkValue.startsWith("paper:")) {
+      const paper = examPapers.find((p) => p.id === linkValue.slice(6));
+      return { bookId: null, examPaperId: paper?.id || null, materialLabel: paper?.title || null };
+    }
+    return { bookId: null, examPaperId: null, materialLabel: null };
   }
 
   async function submitAdd() {
     if (!title.trim() || saving) return;
     setSaving(true);
-    const book = books.find((b) => b.id === bookId);
+    const link = resolveLink();
     if (editing) {
       await fetch(`/api/todos/${editing.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subject,
-          title: title.trim(),
-          date,
-          bookId: bookId || null,
-          materialLabel: book ? book.title : null,
-        }),
+        body: JSON.stringify({ subject, title: title.trim(), date, ...link }),
       });
     } else {
       await fetch("/api/todos", {
@@ -179,8 +196,9 @@ export function Todo() {
           subject,
           title: title.trim(),
           date,
-          bookId: bookId || undefined,
-          materialLabel: book ? book.title : undefined,
+          bookId: link.bookId || undefined,
+          examPaperId: link.examPaperId || undefined,
+          materialLabel: link.materialLabel || undefined,
         }),
       });
     }
@@ -344,16 +362,29 @@ export function Todo() {
         />
         <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">연동 학습자료 (선택)</p>
         <select
-          value={bookId}
-          onChange={(e) => setBookId(e.target.value)}
+          value={linkValue}
+          onChange={(e) => setLinkValue(e.target.value)}
           className="mb-5 w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none"
         >
           <option value="">연동 안 함</option>
-          {books.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.subject} · {b.title}
-            </option>
-          ))}
+          {books.length > 0 && (
+            <optgroup label="교재">
+              {books.map((b) => (
+                <option key={b.id} value={`book:${b.id}`}>
+                  {b.subject} · {b.title}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {examPapers.length > 0 && (
+            <optgroup label="시험지">
+              {examPapers.map((p) => (
+                <option key={p.id} value={`paper:${p.id}`}>
+                  {p.kind === "FULL" ? "전과목" : p.subject} · {p.title}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
         <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">날짜</p>
         <input

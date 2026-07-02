@@ -11,6 +11,7 @@ const patchSchema = z.object({
   title: z.string().min(1).optional(),
   date: z.string().min(1).optional(),
   bookId: z.string().nullable().optional(),
+  examPaperId: z.string().nullable().optional(),
   materialLabel: z.string().nullable().optional(),
 });
 
