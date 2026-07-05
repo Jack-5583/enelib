@@ -92,8 +92,8 @@ function extractNaverError(data: unknown): { code?: string; msg?: string } {
   const candidates = [d, (d?.error as Record<string, unknown>) || null, (d?.message as Record<string, unknown>)?.error as Record<string, unknown> | null];
   for (const c of candidates) {
     if (!c) continue;
-    const code = (c.errorCode || c.error_code || c.code) as string | undefined;
-    const msg = (c.msg || c.message || c.error_description) as string | undefined;
+    const code = [c.errorCode, c.error_code, c.code].find((v) => typeof v === "string") as string | undefined;
+    const msg = [c.msg, c.message, c.error_description].find((v) => typeof v === "string") as string | undefined;
     if (code || msg) return { code, msg };
   }
   return {};
