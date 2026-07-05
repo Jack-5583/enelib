@@ -43,8 +43,13 @@ interface QuestionDetail {
   postStatus: string;
   postError: string | null;
   cafeArticleUrl: string | null;
-  commentsEmbedUrl: string | null;
   commentCount: number;
+}
+
+interface CafeComment {
+  nickname: string;
+  content: string;
+  date?: string;
 }
 
 export function Questions() {
@@ -424,11 +429,29 @@ function QuestionForm({
 function QuestionDetailSheet({ id, onClose }: { id: string; onClose: () => void }) {
   const [detail, setDetail] = useState<QuestionDetail | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [comments, setComments] = useState<CafeComment[] | null>(null);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [commentsLoaded, setCommentsLoaded] = useState(false);
+
+  function loadComments() {
+    setLoadingComments(true);
+    fetch(`/api/questions/${id}/comments`)
+      .then((r) => r.json())
+      .then((d) => setComments(d.comments))
+      .finally(() => {
+        setLoadingComments(false);
+        setCommentsLoaded(true);
+      });
+  }
 
   useEffect(() => {
     fetch(`/api/questions/${id}`)
       .then((r) => r.json())
-      .then(setDetail);
+      .then((d: QuestionDetail) => {
+        setDetail(d);
+        if (d.postStatus === "posted") loadComments();
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   async function del() {
@@ -469,19 +492,42 @@ function QuestionDetailSheet({ id, onClose }: { id: string; onClose: () => void 
 
       {detail.postStatus === "posted" && (
         <div className="mb-6 border-t border-[#16161614] pt-4">
-          <p className="m-0 mb-3 text-[13px] leading-5 text-[#161616]/50">
-            댓글 {detail.commentCount}개 · 새 댓글이 달리면 이 앱에서 알려드려요.
-          </p>
-          {detail.commentsEmbedUrl && (
-            <iframe
-              src={detail.commentsEmbedUrl}
-              title="카페 댓글"
-              className="mb-2 h-[360px] w-full border border-[#16161614]"
-            />
+          <div className="mb-3 flex items-center justify-between">
+            <p className="m-0 text-[13px] leading-5 text-[#161616]/50">
+              댓글 {detail.commentCount}개 · 새 댓글이 달리면 이 앱에서 알려드려요.
+            </p>
+            <button onClick={loadComments} disabled={loadingComments} className="border-none bg-none p-0 text-[12px] text-[#161616]/50 underline underline-offset-[3px] disabled:opacity-50">
+              새로고침
+            </button>
+          </div>
+
+          {loadingComments && <p className="m-0 py-6 text-center text-[13px] text-[#161616]/40">댓글 불러오는 중…</p>}
+
+          {!loadingComments && commentsLoaded && comments !== null && comments.length === 0 && (
+            <p className="m-0 py-6 text-center text-[13px] text-[#161616]/40">아직 댓글이 없습니다.</p>
           )}
+
+          {comments !== null && comments.length > 0 && (
+            <div className="mb-3 flex flex-col gap-3">
+              {comments.map((c, i) => (
+                <div key={i} className="border-b border-[#16161614] pb-3">
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-[13px] font-semibold text-[#161616]">{c.nickname}</span>
+                    {c.date && <span className="text-[11px] text-[#161616]/40">{c.date}</span>}
+                  </div>
+                  <p className="m-0 text-[14px] leading-6 whitespace-pre-wrap text-[#393939]">{c.content}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!loadingComments && commentsLoaded && comments === null && (
+            <p className="m-0 mb-2 text-[13px] text-[#161616]/40">댓글을 불러오지 못했습니다.</p>
+          )}
+
           {detail.cafeArticleUrl && (
             <a href={detail.cafeArticleUrl} target="_blank" rel="noreferrer" className="text-[12px] text-[#161616]/40 underline underline-offset-[3px]">
-              댓글이 안 보이면 여기를 눌러 카페에서 직접 확인하세요 ↗
+              카페에서 직접 확인하기 ↗
             </a>
           )}
         </div>

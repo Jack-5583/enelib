@@ -26,3 +26,78 @@ export async function fetchCommentCount(clubid: string, articleId: string): Prom
     return null;
   }
 }
+
+export interface ScrapedComment {
+  nickname: string;
+  content: string;
+  date?: string;
+}
+
+const CONTENT_KEYS = ["content", "commentContent", "refContent", "body", "text"];
+const NICKNAME_KEYS = ["nickName", "nickname", "writerNickname", "writer", "memberNickname", "authorNickname", "name"];
+const DATE_KEYS = ["regDate", "createDate", "addDate", "writeDate", "date", "regDt"];
+
+function pickStringField(obj: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const v = obj[key];
+    if (typeof v === "string" && v) return v;
+  }
+  return undefined;
+}
+
+function looksLikeComment(obj: Record<string, unknown>): boolean {
+  return !!pickStringField(obj, CONTENT_KEYS) && !!pickStringField(obj, NICKNAME_KEYS);
+}
+
+/** Naver's mobile cafe pages are server-rendered React apps that embed their full
+ * page state (including the comment list) as JSON in a __NEXT_DATA__ script tag.
+ * We don't know the exact field names in advance, so this walks the tree looking
+ * for an array of objects that look like comments, rather than assuming one path. */
+function findCommentArrays(node: unknown, depth: number, out: Record<string, unknown>[][]): void {
+  if (depth > 10 || node == null || typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    if (node.length > 0 && node.every((el) => el && typeof el === "object" && looksLikeComment(el as Record<string, unknown>))) {
+      out.push(node as Record<string, unknown>[]);
+      return;
+    }
+    for (const el of node) findCommentArrays(el, depth + 1, out);
+    return;
+  }
+  for (const key of Object.keys(node as Record<string, unknown>)) {
+    findCommentArrays((node as Record<string, unknown>)[key], depth + 1, out);
+  }
+}
+
+/** Best-effort: returns the parsed comment list, or null if the page's markup
+ * doesn't match the shape we expect this time (Naver can change it without notice). */
+export async function fetchComments(clubid: string, articleId: string): Promise<ScrapedComment[] | null> {
+  try {
+    const res = await fetch(getCommentsEmbedUrl(clubid, articleId), {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; enelib-bot/1.0)" },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const nextDataMatch = /<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/.exec(html);
+    if (!nextDataMatch) return null;
+    let nextData: unknown;
+    try {
+      nextData = JSON.parse(nextDataMatch[1]);
+    } catch {
+      return null;
+    }
+    const arrays: Record<string, unknown>[][] = [];
+    findCommentArrays(nextData, 0, arrays);
+    if (arrays.length === 0) return null;
+    const best = arrays.reduce((a, b) => (b.length > a.length ? b : a));
+    return best
+      .map((c) => ({
+        nickname: pickStringField(c, NICKNAME_KEYS) || "익명",
+        content: pickStringField(c, CONTENT_KEYS) || "",
+        date: pickStringField(c, DATE_KEYS),
+      }))
+      .filter((c) => c.content);
+  } catch {
+    return null;
+  }
+}

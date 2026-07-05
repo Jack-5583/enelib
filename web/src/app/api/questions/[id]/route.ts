@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { getResearchLab, getResearchLabBoard } from "@/lib/researchLabs";
-import { getCommentsEmbedUrl } from "@/lib/naver";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -16,8 +15,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     await prisma.question.update({ where: { id }, data: { hasUnseenReply: false } });
   }
 
-  const clubid = getResearchLab(question.labId)?.clubid;
-
   return NextResponse.json({
     id: question.id,
     labId: question.labId,
@@ -30,7 +27,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     postStatus: question.postStatus,
     postError: question.postError,
     cafeArticleUrl: question.cafeArticleUrl,
-    commentsEmbedUrl: clubid && question.cafeArticleId ? getCommentsEmbedUrl(clubid, question.cafeArticleId) : null,
     commentCount: question.commentCount,
     createdAt: question.createdAt,
   });
