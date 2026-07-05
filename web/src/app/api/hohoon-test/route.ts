@@ -101,7 +101,7 @@ export async function POST(req: Request) {
     gbn: "new",
     ix: "",
     returl: "/weekly/studyquestions.html",
-    oldfilecnt: "",
+    oldfilecnt: "0",
     imgcode: String(Date.now()),
     isopen: "Y",
     name: "",
