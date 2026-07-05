@@ -10,6 +10,8 @@ export async function GET() {
     RESEARCH_LABS.map((l) => ({
       id: l.id,
       name: l.name,
+      subject: l.subject,
+      kind: l.kind,
       boards: l.boards.map((b) => ({ id: b.id, name: b.name })),
     }))
   );

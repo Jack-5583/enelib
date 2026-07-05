@@ -347,6 +347,7 @@ model Question {
   cafeArticleUrl String?
   commentCount   Int      @default(0)
   hasUnseenReply Boolean  @default(false)
+  done           Boolean  @default(false)
   createdAt      DateTime @default(now())
 
   @@index([ownerId])
@@ -394,6 +395,7 @@ model HohoonQuestion {
   articleUrl     String?
   commentCount   Int      @default(0)
   hasUnseenReply Boolean  @default(false)
+  done           Boolean  @default(false)
   createdAt      DateTime @default(now())
 
   @@index([ownerId])

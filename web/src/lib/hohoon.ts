@@ -195,3 +195,12 @@ export function buildArticleHtml(text: string, imagePaths: string[]): string {
 export function newImgcode(): string {
   return `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 }
+
+/** The shared hohoonmath account questions are posted through. Overridable via
+ * env; falls back to the configured default so no setup is required. */
+export function hohoonCredentials(): { userId: string; userPass: string } {
+  return {
+    userId: process.env.HOHOON_USER_ID || "ksh5583",
+    userPass: process.env.HOHOON_USER_PASS || "hohoon",
+  };
+}

@@ -7,8 +7,13 @@ export interface CafeBoard {
 export interface ResearchLab {
   id: string;
   name: string;
-  clubid: string;
-  homeUrl: string;
+  /** Subject is fixed per lab and shown on the question automatically. */
+  subject: string;
+  /** "naver" labs post to a Naver Cafe via the Open API; "hohoon" posts to
+   * hohoonmath.com via its login/captcha flow. */
+  kind: "naver" | "hohoon";
+  clubid?: string;
+  homeUrl?: string;
   boards: CafeBoard[];
 }
 
@@ -18,6 +23,8 @@ export const RESEARCH_LABS: ResearchLab[] = [
   {
     id: "singugeo",
     name: "신국어연구소",
+    subject: "국어",
+    kind: "naver",
     clubid: "31113195",
     homeUrl: "https://cafe.naver.com/mysclass",
     boards: [{ id: "qna", name: "질문 게시판", menuid: "55" }],
@@ -25,6 +32,8 @@ export const RESEARCH_LABS: ResearchLab[] = [
   {
     id: "jeongseokjun",
     name: "정석준연구소",
+    subject: "생명과학1",
+    kind: "naver",
     clubid: "31342990",
     homeUrl: "https://cafe.naver.com/jsjls",
     boards: [
@@ -50,6 +59,8 @@ export const RESEARCH_LABS: ResearchLab[] = [
   {
     id: "sinseonggyu",
     name: "신성규수학연구소",
+    subject: "수학",
+    kind: "naver",
     clubid: "31112706",
     homeUrl: "https://cafe.naver.com/ssgmath",
     boards: [
@@ -65,11 +76,12 @@ export const RESEARCH_LABS: ResearchLab[] = [
     ],
   },
   {
-    id: "test",
-    name: "테스트카페",
-    clubid: "31609507",
-    homeUrl: "https://cafe.naver.com/enelabh3s08",
-    boards: [{ id: "qna", name: "질문 게시판", menuid: "17" }],
+    id: "hohoon",
+    name: "호형훈제수학연구소",
+    subject: "수학",
+    kind: "hohoon",
+    homeUrl: "https://www.hohoonmath.com/weekly/studyquestions.html",
+    boards: [{ id: "studyquestions", name: "학습질문", menuid: "" }],
   },
 ];
 

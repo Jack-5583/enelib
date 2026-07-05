@@ -56,6 +56,7 @@ export async function GET() {
       cafeArticleUrl: q.cafeArticleUrl,
       commentCount: q.commentCount,
       hasUnseenReply: q.hasUnseenReply,
+      done: q.done,
       createdAt: q.createdAt,
     }))
   );
@@ -70,7 +71,6 @@ function dataUrlToBuffer(dataUrl: string): { buffer: Buffer; contentType: string
 const createSchema = z.object({
   labId: z.string().min(1),
   boardId: z.string().min(1),
-  subject: z.string().min(1),
   title: z.string().min(1).max(100),
   content: z.string().min(1).max(5000),
   photoDataUrls: z.array(z.string()).max(10).default([]),
@@ -88,6 +88,11 @@ export async function POST(req: Request) {
   const found = getResearchLabBoard(data.labId, data.boardId);
   if (!found) return NextResponse.json({ error: "존재하지 않는 연구소 또는 게시판입니다." }, { status: 400 });
   const { lab, board } = found;
+  // hohoonmath labs post through the separate captcha compose flow, not here.
+  if (lab.kind !== "naver" || !lab.clubid) {
+    return NextResponse.json({ error: "이 연구소는 다른 방식으로 질문을 등록합니다." }, { status: 400 });
+  }
+  const clubid = lab.clubid;
   if (!user.naverAccessToken) {
     return NextResponse.json({ error: "네이버 계정을 먼저 연결해 주세요.", needsNaverConnect: true }, { status: 409 });
   }
@@ -118,7 +123,7 @@ export async function POST(req: Request) {
       ownerId: user.id,
       labId: lab.id,
       boardId: board.id,
-      subject: data.subject,
+      subject: lab.subject,
       title: data.title,
       content: data.content,
       photoUrls: data.photoDataUrls,
@@ -129,7 +134,7 @@ export async function POST(req: Request) {
   try {
     const result = await postNaverCafeArticle({
       accessToken,
-      clubid: lab.clubid,
+      clubid,
       menuid: board.menuid,
       subject: data.title,
       content: data.content.replace(/\n/g, "<br>"),
