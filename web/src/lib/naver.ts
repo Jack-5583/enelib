@@ -43,6 +43,21 @@ export async function exchangeNaverCode(code: string, state: string) {
   return data;
 }
 
+export async function refreshNaverToken(refreshToken: string) {
+  const params = new URLSearchParams({
+    grant_type: "refresh_token",
+    client_id: CLIENT_ID,
+    client_secret: CLIENT_SECRET,
+    refresh_token: refreshToken,
+  });
+  const res = await fetch(`https://nid.naver.com/oauth2.0/token?${params}`);
+  const data = (await res.json()) as NaverTokenResponse;
+  if (!res.ok || data.error || !data.access_token) {
+    throw new Error(data.error_description || "네이버 로그인 갱신에 실패했습니다.");
+  }
+  return data;
+}
+
 export async function getNaverProfile(accessToken: string) {
   const res = await fetch("https://openapi.naver.com/v1/nid/me", {
     headers: { Authorization: `Bearer ${accessToken}` },

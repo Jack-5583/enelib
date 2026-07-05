@@ -3,12 +3,36 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { getResearchLab, getResearchLabBoard } from "@/lib/researchLabs";
-import { postNaverCafeArticle, NaverCafeError } from "@/lib/naver";
+import { postNaverCafeArticle, refreshNaverToken, NaverCafeError } from "@/lib/naver";
 
 // Error codes the cafe write API returns when the account isn't (yet) a member
 // eligible to post — the fix on our side is to send the student to join once
 // on Naver, not to retry the write.
 const MEMBERSHIP_REQUIRED_CODES = new Set(["0005", "AP002", "AP003", "AP004"]);
+
+/** Naver access tokens expire in ~1 hour. Refresh ahead of time (rather than
+ * reacting to a 401) so a stale token never reaches the cafe write API. */
+async function ensureValidNaverAccessToken(user: {
+  id: string;
+  naverAccessToken: string | null;
+  naverRefreshToken: string | null;
+  naverTokenExpiresAt: Date | null;
+}): Promise<string | null> {
+  if (!user.naverAccessToken) return null;
+  const expiringSoon = !user.naverTokenExpiresAt || user.naverTokenExpiresAt.getTime() < Date.now() + 5 * 60 * 1000;
+  if (!expiringSoon || !user.naverRefreshToken) return user.naverAccessToken;
+
+  const token = await refreshNaverToken(user.naverRefreshToken);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      naverAccessToken: token.access_token,
+      naverRefreshToken: token.refresh_token || user.naverRefreshToken,
+      naverTokenExpiresAt: new Date(Date.now() + Number(token.expires_in) * 1000),
+    },
+  });
+  return token.access_token;
+}
 
 export async function GET() {
   const user = await getSessionUser();
@@ -67,6 +91,18 @@ export async function POST(req: Request) {
   if (!user.naverAccessToken) {
     return NextResponse.json({ error: "네이버 계정을 먼저 연결해 주세요.", needsNaverConnect: true }, { status: 409 });
   }
+  let accessToken: string | null;
+  try {
+    accessToken = await ensureValidNaverAccessToken(user);
+  } catch {
+    return NextResponse.json(
+      { error: "네이버 로그인이 만료되었습니다. 다시 연동해 주세요.", needsNaverConnect: true },
+      { status: 409 }
+    );
+  }
+  if (!accessToken) {
+    return NextResponse.json({ error: "네이버 계정을 먼저 연결해 주세요.", needsNaverConnect: true }, { status: 409 });
+  }
 
   const images = data.photoDataUrls
     .map((url, i) => {
@@ -92,7 +128,7 @@ export async function POST(req: Request) {
 
   try {
     const result = await postNaverCafeArticle({
-      accessToken: user.naverAccessToken,
+      accessToken,
       clubid: lab.clubid,
       menuid: board.menuid,
       subject: `[TA질문] ${data.title}`,
