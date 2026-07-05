@@ -53,6 +53,9 @@ model User {
   exams        Exam[]
   ddays        Dday[]
   questions    Question[]
+  hohoonAccount   HohoonAccount?
+  hohoonDrafts    HohoonDraft[]
+  hohoonQuestions HohoonQuestion[]
   camSessions  CamSession[]
   timelineEntries TimelineEntry[]
   studentAuthCodes StudentAuthCode[]
@@ -342,6 +345,53 @@ model Question {
   cafeClubUrl    String?
   cafeArticleId  String?
   cafeArticleUrl String?
+  commentCount   Int      @default(0)
+  hasUnseenReply Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([ownerId])
+}
+
+/// A student's saved hohoonmath.com login, used to post study questions to that
+/// board on their behalf. Credentials are stored AES-256-GCM encrypted.
+model HohoonAccount {
+  id          String   @id @default(cuid())
+  ownerId     String   @unique
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  userIdEnc   String    // encrypted hohoonmath login id
+  userPassEnc String    // encrypted hohoonmath password
+  writerName  String?   // cached board nickname (prefilled by the write form)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// A short-lived compose session. hohoonmath's captcha answer is bound to the
+/// PHP session that fetched the image, so we must hold that live session cookie
+/// server-side between "show captcha", "upload images", and "submit".
+model HohoonDraft {
+  id         String   @id @default(cuid())
+  ownerId    String
+  owner      User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  phpsessid  String    // live hohoonmath session cookie (name=value)
+  imgcode    String    // temp image folder id shared by this post's uploads
+  writerName String
+  imagePaths String[] @default([])
+  createdAt  DateTime @default(now())
+
+  @@index([ownerId])
+}
+
+/// A study question a student posted to hohoonmath, mirrored locally so we can
+/// show it in-app and (later) surface replies.
+model HohoonQuestion {
+  id             String   @id @default(cuid())
+  ownerId        String
+  owner          User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  subject        String
+  body           String   @db.Text
+  imagePaths     String[] @default([])
+  articleId      String?
+  articleUrl     String?
   commentCount   Int      @default(0)
   hasUnseenReply Boolean  @default(false)
   createdAt      DateTime @default(now())
