@@ -52,20 +52,6 @@ export async function getNaverProfile(accessToken: string) {
   return data.response as { id: string; nickname?: string; name?: string };
 }
 
-/** Naver's legacy Cafe write API expects request text re-encoded as MS949 (CP949)
- * bytes, percent-encoded — not the UTF-8 bytes a normal encodeURIComponent produces.
- * Getting this wrong is the #1 cause of garbled Korean text on the posted article. */
-function cp949PercentEncode(str: string): string {
-  const bytes = iconv.encode(str, "cp949");
-  let out = "";
-  for (const byte of bytes) {
-    const ch = String.fromCharCode(byte);
-    if (/[A-Za-z0-9\-_.!~*'()]/.test(ch)) out += ch;
-    else out += "%" + byte.toString(16).toUpperCase().padStart(2, "0");
-  }
-  return out;
-}
-
 function safeJsonParse(text: string): Record<string, unknown> {
   try {
     return JSON.parse(text) || {};
@@ -97,34 +83,6 @@ function extractNaverError(data: unknown): { code?: string; msg?: string } {
     if (code || msg) return { code, msg };
   }
   return {};
-}
-
-/** The cafe join API only accepts Hangul, English letters, and digits in the
- * nickname field — anything else (spaces, punctuation, emoji) gets rejected. */
-function sanitizeCafeNickname(nickname: string): string {
-  const cleaned = nickname.replace(/[^가-힣a-zA-Z0-9]/g, "");
-  return cleaned || `member${Math.floor(Math.random() * 100000)}`;
-}
-
-/** Join a cafe on behalf of the logged-in Naver member. Safe to call even if
- * already a member — Naver returns error code CA004 in that case, which we treat as success. */
-export async function joinNaverCafe(accessToken: string, clubid: string, nickname: string) {
-  const body = `nickname=${cp949PercentEncode(sanitizeCafeNickname(nickname))}`;
-  const res = await fetch(`https://openapi.naver.com/v1/cafe/${clubid}/members`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body,
-  });
-  const raw = await res.text();
-  const data = safeJsonParse(raw);
-  const { code, msg } = extractNaverError(data);
-  if (code === "CA004") return; // already a member
-  if (!res.ok || data?.status !== 200) {
-    throw new NaverCafeError(msg || "카페 가입에 실패했습니다.", code, raw);
-  }
 }
 
 interface PostArticleParams {

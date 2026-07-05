@@ -3,7 +3,12 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { getResearchLab, getResearchLabBoard } from "@/lib/researchLabs";
-import { joinNaverCafe, postNaverCafeArticle, NaverCafeError } from "@/lib/naver";
+import { postNaverCafeArticle, NaverCafeError } from "@/lib/naver";
+
+// Error codes the cafe write API returns when the account isn't (yet) a member
+// eligible to post — the fix on our side is to send the student to join once
+// on Naver, not to retry the write.
+const MEMBERSHIP_REQUIRED_CODES = new Set(["0005", "AP002", "AP003", "AP004"]);
 
 export async function GET() {
   const user = await getSessionUser();
@@ -86,27 +91,6 @@ export async function POST(req: Request) {
   });
 
   try {
-    await joinNaverCafe(user.naverAccessToken, lab.clubid, user.naverNickname || user.name);
-  } catch (err) {
-    // The Open API's auto-join only works for cafes set to instant, no-approval join.
-    // Many study cafes require a manual application, which the API can't complete on
-    // the student's behalf — so send them to join it themselves, once, on Naver.
-    const message = err instanceof NaverCafeError ? err.message : "카페 가입에 실패했습니다.";
-    await prisma.question.update({
-      where: { id: question.id },
-      data: { postStatus: "failed", postError: message },
-    });
-    return NextResponse.json(
-      {
-        error: `${message} 먼저 네이버에서 해당 카페에 가입한 뒤 다시 시도해 주세요.`,
-        questionId: question.id,
-        joinUrl: lab.homeUrl,
-      },
-      { status: 502 }
-    );
-  }
-
-  try {
     const result = await postNaverCafeArticle({
       accessToken: user.naverAccessToken,
       clubid: lab.clubid,
@@ -128,10 +112,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ id: question.id, cafeArticleUrl: result.articleUrl });
   } catch (err) {
     const message = err instanceof NaverCafeError ? err.message : "카페에 글을 올리는 데 실패했습니다.";
+    const needsJoin = err instanceof NaverCafeError && !!err.code && MEMBERSHIP_REQUIRED_CODES.has(err.code);
     await prisma.question.update({
       where: { id: question.id },
       data: { postStatus: "failed", postError: message },
     });
-    return NextResponse.json({ error: message, questionId: question.id }, { status: 502 });
+    return NextResponse.json(
+      {
+        error: needsJoin ? `${message} 먼저 네이버에서 해당 카페에 가입한 뒤 다시 시도해 주세요.` : message,
+        questionId: question.id,
+        joinUrl: needsJoin ? lab.homeUrl : undefined,
+      },
+      { status: 502 }
+    );
   }
 }
