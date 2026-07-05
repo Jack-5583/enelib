@@ -151,9 +151,12 @@ export async function postNaverCafeArticle(params: PostArticleParams): Promise<P
   // Naver open APIs wrap results in a "message.result" envelope — accept either.
   const result = (data.message as Record<string, unknown>)?.result as Record<string, unknown> | undefined;
   const flat = result ?? data;
-  if (!res.ok || flat.status !== 200 || !flat.articleUrl) {
+  // articleUrl is the actual proof of success — don't gate on flat.status too, since
+  // Naver's docs show it as an int but some responses may send it as a numeric string.
+  if (!res.ok || !flat.articleUrl) {
     const { code, msg } = extractNaverError(data);
-    throw new NaverCafeError(msg || "카페 글쓰기에 실패했습니다.", code, raw);
+    const fallback = raw.trim() ? `카페 글쓰기에 실패했습니다. (서버 응답: ${raw.slice(0, 300)})` : "카페 글쓰기에 실패했습니다. (빈 응답)";
+    throw new NaverCafeError(msg || fallback, code, raw);
   }
   return {
     cafeUrl: String(flat.cafeUrl),
