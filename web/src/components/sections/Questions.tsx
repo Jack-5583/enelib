@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Sheet } from "@/components/ui/Sheet";
-import { SUBJECTS } from "@/lib/subjects";
 
 interface BoardOption {
   id: string;
@@ -14,21 +13,24 @@ interface BoardOption {
 interface LabOption {
   id: string;
   name: string;
+  subject: string;
+  kind: "naver" | "hohoon";
   boards: BoardOption[];
 }
 
 interface QuestionItem {
   id: string;
-  labId: string;
+  kind: "naver" | "hohoon";
   labName: string;
-  boardName: string;
   subject: string;
   title: string;
-  postStatus: string;
-  postError: string | null;
-  cafeArticleUrl: string | null;
+  body?: string;
+  imagePaths?: string[];
+  postStatus?: string;
+  cafeArticleUrl?: string | null;
   commentCount: number;
   hasUnseenReply: boolean;
+  done: boolean;
   createdAt: string;
 }
 
@@ -57,7 +59,8 @@ export function Questions() {
   const [naverConnected, setNaverConnected] = useState<boolean | null>(null);
   const [questions, setQuestions] = useState<QuestionItem[] | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<QuestionItem | null>(null);
+  const [tab, setTab] = useState<"open" | "done">("open");
   const [naverNotice] = useState<"connected" | "error" | null>(() => {
     const p = searchParams.get("naver");
     return p === "connected" || p === "error" ? p : null;
@@ -66,12 +69,18 @@ export function Questions() {
   function loadMe() {
     fetch("/api/me")
       .then((r) => r.json())
-      .then((d) => setNaverConnected(!!d.naverConnected));
+      .then((d) => setNaverConnected(!!d.naverConnected))
+      .catch(() => {});
   }
   function loadQuestions() {
-    fetch("/api/questions")
-      .then((r) => r.json())
-      .then(setQuestions);
+    Promise.all([
+      fetch("/api/questions").then((r) => r.json()).catch(() => []),
+      fetch("/api/hohoon/questions").then((r) => r.json()).catch(() => []),
+    ]).then(([naver, hohoon]) => {
+      const a: QuestionItem[] = (Array.isArray(naver) ? naver : []).map((q) => ({ ...q, kind: "naver" as const }));
+      const b: QuestionItem[] = Array.isArray(hohoon) ? hohoon : [];
+      setQuestions([...a, ...b].sort((x, y) => (x.createdAt < y.createdAt ? 1 : -1)));
+    });
   }
 
   useEffect(() => {
@@ -80,6 +89,20 @@ export function Questions() {
     const interval = setInterval(loadQuestions, 60_000);
     return () => clearInterval(interval);
   }, []);
+
+  async function toggleDone(q: QuestionItem) {
+    const url = q.kind === "hohoon" ? `/api/hohoon/questions/${q.id}` : `/api/questions/${q.id}`;
+    setQuestions((prev) => prev?.map((x) => (x.id === q.id ? { ...x, done: !x.done } : x)) ?? prev);
+    await fetch(url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ done: !q.done }),
+    }).catch(() => {});
+  }
+
+  const shown = questions?.filter((q) => (tab === "done" ? q.done : !q.done)) ?? null;
+  const openCount = questions?.filter((q) => !q.done).length ?? 0;
+  const doneCount = questions?.filter((q) => q.done).length ?? 0;
 
   return (
     <div>
@@ -90,17 +113,13 @@ export function Questions() {
         </button>
       </div>
 
-      {naverNotice === "connected" && (
-        <p className="m-0 py-3 text-[13px] text-[#003ce0]">네이버 계정이 연동되었습니다.</p>
-      )}
-      {naverNotice === "error" && (
-        <p className="m-0 py-3 text-[13px] text-[#e0362f]">네이버 계정 연동에 실패했습니다. 다시 시도해 주세요.</p>
-      )}
+      {naverNotice === "connected" && <p className="m-0 py-3 text-[13px] text-[#003ce0]">네이버 계정이 연동되었습니다.</p>}
+      {naverNotice === "error" && <p className="m-0 py-3 text-[13px] text-[#e0362f]">네이버 계정 연동에 실패했습니다. 다시 시도해 주세요.</p>}
 
       {naverConnected === false && (
         <div className="my-4 border border-[#16161614] bg-[#f4f4f4] p-4">
           <p className="m-0 mb-3 text-[14px] leading-6 text-[#161616]">
-            질문을 카페에 올리려면 네이버 계정 연동이 필요해요. (본인 명의의 네이버 계정으로, 각 연구소 카페의 회원이어야 글쓰기가 가능합니다.)
+            네이버 연구소 카페(신국어·정석준·신성규)에 질문하려면 네이버 계정 연동이 필요해요. (호형훈제수학연구소는 연동 없이 바로 질문 가능해요.)
           </p>
           <a
             href="/api/naver/authorize"
@@ -111,29 +130,42 @@ export function Questions() {
         </div>
       )}
 
-      {questions?.map((q) => (
+      <div className="flex gap-2 py-4">
         <button
-          key={q.id}
-          onClick={() => setDetailId(q.id)}
-          className="flex w-full items-center gap-3 border-0 border-b border-[#16161614] bg-white py-4 text-left"
+          onClick={() => setTab("open")}
+          className={`rounded-full border px-4 py-1.5 text-[13px] lg:text-[14px] ${tab === "open" ? "border-[#161616] bg-[#161616] text-white" : "border-[#16161624] bg-white text-[#161616]/60"}`}
         >
-          <div className="min-w-0 flex-1">
+          진행 중 {openCount > 0 && `(${openCount})`}
+        </button>
+        <button
+          onClick={() => setTab("done")}
+          className={`rounded-full border px-4 py-1.5 text-[13px] lg:text-[14px] ${tab === "done" ? "border-[#161616] bg-[#161616] text-white" : "border-[#16161624] bg-white text-[#161616]/60"}`}
+        >
+          완료 {doneCount > 0 && `(${doneCount})`}
+        </button>
+      </div>
+
+      {shown?.map((q) => (
+        <div key={q.id} className="flex items-center gap-3 border-0 border-b border-[#16161614] py-4">
+          <button onClick={() => setDetail(q)} className="min-w-0 flex-1 border-none bg-none p-0 text-left">
             <div className="mb-1.5 flex items-center gap-2">
               <Badge>{q.labName}</Badge>
-              <span className="text-[12px] text-[#161616]/40">{q.boardName}</span>
+              <span className="text-[12px] text-[#161616]/40">{q.subject}</span>
               {q.postStatus === "failed" && <span className="text-[12px] text-[#e0362f]">등록 실패</span>}
               {q.hasUnseenReply && <span className="h-2 w-2 flex-none rounded-full bg-[#e0362f]" />}
             </div>
-            <p className="m-0 text-[15px] leading-6 text-[#161616] lg:text-[16px]">{q.title}</p>
-          </div>
-          {q.postStatus === "posted" && (
-            <span className="flex-none text-[13px] text-[#161616]/40">댓글 {q.commentCount}</span>
-          )}
-          <span className="flex-none text-[16px] text-[#161616]/30">→</span>
-        </button>
+            <p className={`m-0 text-[15px] leading-6 lg:text-[16px] ${q.done ? "text-[#161616]/35 line-through" : "text-[#161616]"}`}>{q.title}</p>
+          </button>
+          <button
+            onClick={() => toggleDone(q)}
+            className={`flex-none rounded-full border px-2.5 py-1 text-[12px] ${q.done ? "border-[#16161624] bg-white text-[#161616]/50" : "border-[#161616] bg-white text-[#161616]"}`}
+          >
+            {q.done ? "완료 취소" : "완료"}
+          </button>
+        </div>
       ))}
-      {questions?.length === 0 && (
-        <p className="m-0 py-12 text-center text-[14px] text-[#161616]/40">등록된 질문이 없습니다.</p>
+      {shown?.length === 0 && (
+        <p className="m-0 py-12 text-center text-[14px] text-[#161616]/40">{tab === "done" ? "완료된 질문이 없습니다." : "진행 중인 질문이 없습니다."}</p>
       )}
 
       {addOpen && (
@@ -147,11 +179,20 @@ export function Questions() {
         />
       )}
 
-      {detailId && (
+      {detail && detail.kind === "naver" && (
         <QuestionDetailSheet
-          id={detailId}
+          id={detail.id}
           onClose={() => {
-            setDetailId(null);
+            setDetail(null);
+            loadQuestions();
+          }}
+        />
+      )}
+      {detail && detail.kind === "hohoon" && (
+        <HohoonDetailSheet
+          item={detail}
+          onClose={() => {
+            setDetail(null);
             loadQuestions();
           }}
         />
@@ -176,14 +217,14 @@ function AddQuestionSheet({
   useEffect(() => {
     fetch("/api/questions/labs")
       .then((r) => r.json())
-      .then(setLabs);
+      .then(setLabs)
+      .catch(() => {});
   }, []);
 
   const lab = labs.find((l) => l.id === labId) || null;
 
   function pickLab(l: LabOption) {
     setLabId(l.id);
-    // Skip the board picker entirely when there's only one board to choose.
     setBoardId(l.boards.length === 1 ? l.boards[0].id : null);
   }
 
@@ -191,7 +232,7 @@ function AddQuestionSheet({
     return (
       <Sheet open onClose={onClose} maxWidth={480}>
         <h2 className="m-0 mb-1 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">질문할 연구소 선택하기</h2>
-        <p className="m-0 mb-6 text-[14px] leading-6 text-[#161616]/50">질문을 올릴 연구소 카페를 선택하세요.</p>
+        <p className="m-0 mb-6 text-[14px] leading-6 text-[#161616]/50">질문을 올릴 연구소를 선택하세요. 과목은 연구소에 따라 자동으로 정해져요.</p>
         <div className="flex flex-col gap-2.5">
           {labs.map((l) => (
             <button
@@ -199,7 +240,9 @@ function AddQuestionSheet({
               onClick={() => pickLab(l)}
               className="flex items-center justify-between border border-[#16161614] px-4 py-3.5 text-left"
             >
-              <span className="text-[15px] text-[#161616] lg:text-[16px]">{l.name}</span>
+              <span className="text-[15px] text-[#161616] lg:text-[16px]">
+                {l.name} <span className="text-[13px] text-[#161616]/40">· {l.subject}</span>
+              </span>
               <span className="text-[16px] text-[#161616]/30">→</span>
             </button>
           ))}
@@ -212,6 +255,11 @@ function AddQuestionSheet({
         </div>
       </Sheet>
     );
+  }
+
+  // hohoonmath uses its own login/captcha compose flow.
+  if (lab.kind === "hohoon") {
+    return <HohoonComposeForm labName={lab.name} subject={lab.subject} onBack={() => setLabId(null)} onClose={onClose} onSaved={onSaved} />;
   }
 
   if (!boardId) {
@@ -245,7 +293,6 @@ function AddQuestionSheet({
   const singleBoardLab = lab.boards.length === 1;
   function backFromForm() {
     if (singleBoardLab) {
-      // Board picker was skipped for a single-board lab — go straight back to lab selection.
       setLabId(null);
       setBoardId(null);
     } else {
@@ -254,9 +301,10 @@ function AddQuestionSheet({
   }
 
   return (
-    <QuestionForm
+    <NaverQuestionForm
       labId={lab.id}
       labName={lab.name}
+      subject={lab.subject}
       boardId={boardId}
       boardName={lab.boards.find((b) => b.id === boardId)?.name || boardId}
       onBack={backFromForm}
@@ -267,9 +315,10 @@ function AddQuestionSheet({
   );
 }
 
-function QuestionForm({
+function NaverQuestionForm({
   labId,
   labName,
+  subject,
   boardId,
   boardName,
   onBack,
@@ -279,6 +328,7 @@ function QuestionForm({
 }: {
   labId: string;
   labName: string;
+  subject: string;
   boardId: string;
   boardName: string;
   onBack: () => void;
@@ -286,7 +336,6 @@ function QuestionForm({
   onSaved: () => void;
   onNeedsNaver: () => void;
 }) {
-  const [subject, setSubject] = useState(SUBJECTS[0]);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
@@ -322,14 +371,7 @@ function QuestionForm({
     const res = await fetch("/api/questions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        labId,
-        boardId,
-        subject,
-        title: title.trim(),
-        content: content.trim(),
-        photoDataUrls: photos,
-      }),
+      body: JSON.stringify({ labId, boardId, title: title.trim(), content: content.trim(), photoDataUrls: photos }),
     });
     setSaving(false);
     if (!res.ok) {
@@ -346,21 +388,8 @@ function QuestionForm({
     <Sheet open onClose={onClose} maxWidth={560}>
       <h2 className="m-0 mb-1 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">질문 작성</h2>
       <p className="m-0 mb-6 text-[14px] leading-6 text-[#161616]/50 lg:text-[16px]">
-        <span className="font-semibold text-[#161616]">{labName}</span> · {boardName}에 질문을 올립니다.
+        <span className="font-semibold text-[#161616]">{labName}</span> · {boardName} · {subject}
       </p>
-
-      <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">과목</p>
-      <select
-        value={subject}
-        onChange={(e) => setSubject(e.target.value)}
-        className="mb-5 w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none"
-      >
-        {SUBJECTS.map((s) => (
-          <option key={s} value={s}>
-            {s}
-          </option>
-        ))}
-      </select>
 
       <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">제목</p>
       <input
@@ -424,6 +453,221 @@ function QuestionForm({
           {saving ? "등록 중…" : "질문 등록하기"}
         </button>
       </div>
+    </Sheet>
+  );
+}
+
+function HohoonComposeForm({
+  labName,
+  subject,
+  onBack,
+  onClose,
+  onSaved,
+}: {
+  labName: string;
+  subject: string;
+  onBack: () => void;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [captcha, setCaptcha] = useState<string | null>(null);
+  const [starting, setStarting] = useState(true);
+  const [startError, setStartError] = useState<string | null>(null);
+
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [code, setCode] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/hohoon/compose", { method: "POST" })
+      .then(async (r) => ({ ok: r.ok, d: await r.json().catch(() => ({})) }))
+      .then(({ ok, d }) => {
+        if (!ok) {
+          setStartError(d.error || "질문 작성을 시작하지 못했습니다.");
+          return;
+        }
+        setDraftId(d.draftId);
+        setCaptcha(d.captcha);
+      })
+      .catch(() => setStartError("질문 작성을 시작하지 못했습니다."))
+      .finally(() => setStarting(false));
+  }, []);
+
+  async function onPickPhotos(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!draftId || files.length === 0) return;
+    setUploading(true);
+    setError(null);
+    for (const file of files) {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/hohoon/compose/${draftId}/image`, { method: "POST", body: fd });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.path) setPhotos((prev) => [...prev, `https://www.hohoonmath.com${d.path}`]);
+      else setError(d.error || "이미지 업로드에 실패했습니다.");
+    }
+    setUploading(false);
+  }
+
+  async function refreshCaptcha() {
+    if (!draftId) return;
+    const res = await fetch(`/api/hohoon/compose/${draftId}/captcha`, { method: "POST" });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && d.captcha) setCaptcha(d.captcha);
+  }
+
+  async function submit() {
+    if (!draftId || !title.trim() || !body.trim() || !code.trim() || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    const res = await fetch(`/api/hohoon/compose/${draftId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subject: title.trim(), body: body.trim(), captcha: code.trim() }),
+    });
+    setSubmitting(false);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error || "글 등록에 실패했습니다.");
+      setCode("");
+      refreshCaptcha();
+      return;
+    }
+    onSaved();
+  }
+
+  function cancel() {
+    if (draftId) fetch(`/api/hohoon/compose/${draftId}`, { method: "DELETE" }).catch(() => {});
+    onClose();
+  }
+
+  return (
+    <Sheet open onClose={cancel} maxWidth={560}>
+      <h2 className="m-0 mb-1 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">질문 작성</h2>
+      <p className="m-0 mb-6 text-[14px] leading-6 text-[#161616]/50 lg:text-[16px]">
+        <span className="font-semibold text-[#161616]">{labName}</span> · 학습질문 · {subject}
+      </p>
+
+      {starting && <p className="m-0 py-8 text-center text-[13px] text-[#161616]/40">준비 중…</p>}
+      {startError && (
+        <div className="py-8 text-center">
+          <p className="m-0 mb-4 text-[13px] text-[#e0362f]">{startError}</p>
+          <button onClick={onBack} className="rounded-[2px] border border-[#161616] bg-white px-4 py-2.5 text-[14px] text-[#161616]">
+            뒤로
+          </button>
+        </div>
+      )}
+
+      {!starting && !startError && draftId && (
+        <>
+          <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">제목</p>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="예) 서킷 17회 20번 질문"
+            className="mb-5 w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none"
+          />
+
+          <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">내용</p>
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            rows={6}
+            placeholder="질문 내용을 자세히 적어주세요."
+            className="mb-5 w-full resize-none border border-[#16161614] bg-transparent p-3 text-[14px] leading-6 text-[#161616] outline-none"
+          />
+
+          <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">사진 첨부 {photos.length > 0 && `(${photos.length}장)`}</p>
+          {photos.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {photos.map((url, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={i} src={url} alt="" className="h-20 w-20 rounded-[2px] border border-[#16161614] object-cover" />
+              ))}
+            </div>
+          )}
+          <label className="mb-6 flex w-full cursor-pointer items-center justify-center border border-dashed border-[#c6c6c6] py-3 text-[14px] text-[#161616]/60">
+            {uploading ? "업로드 중…" : "사진 선택 (여러 장 가능)"}
+            <input type="file" accept="image/*" multiple className="hidden" onChange={onPickPhotos} disabled={uploading} />
+          </label>
+
+          <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">자동 등록 방지</p>
+          <div className="mb-3 flex items-center gap-3">
+            {captcha && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={captcha} alt="캡차" className="h-10 border border-[#c6c6c6]" />
+            )}
+            <button onClick={refreshCaptcha} className="border-none bg-none p-0 text-[12px] text-[#161616]/50 underline underline-offset-[3px]">
+              문자 변경
+            </button>
+          </div>
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="위 이미지의 문자를 입력하세요"
+            autoComplete="off"
+            className="mb-5 w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none"
+          />
+
+          {error && <p className="m-0 mb-4 text-[13px] text-[#e0362f]">{error}</p>}
+
+          <div className="flex gap-3">
+            <button onClick={cancel} className="w-[100px] flex-none rounded-[2px] border border-[#161616] bg-white py-3.5 text-[15px] font-medium text-[#161616]">
+              취소
+            </button>
+            <button onClick={submit} disabled={submitting || uploading} className="flex-1 rounded-[2px] border-none bg-[#161616] py-3.5 text-[16px] font-semibold text-white disabled:opacity-50">
+              {submitting ? "등록 중…" : "질문 등록하기"}
+            </button>
+          </div>
+        </>
+      )}
+    </Sheet>
+  );
+}
+
+function HohoonDetailSheet({ item, onClose }: { item: QuestionItem; onClose: () => void }) {
+  const [deleting, setDeleting] = useState(false);
+
+  async function del() {
+    if (!window.confirm("이 질문을 삭제할까요? (호형훈제수학연구소에 이미 올라간 글은 앱에서 삭제해도 사이트에는 그대로 남아있습니다.)")) return;
+    setDeleting(true);
+    await fetch(`/api/hohoon/questions/${item.id}`, { method: "DELETE" });
+    setDeleting(false);
+    onClose();
+  }
+
+  return (
+    <Sheet open onClose={onClose} maxWidth={620}>
+      <div className="mb-4 flex items-center gap-2">
+        <Badge>{item.labName}</Badge>
+        <Badge>{item.subject}</Badge>
+      </div>
+      <h2 className="m-0 mb-4 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">{item.title}</h2>
+      <p className="m-0 mb-5 text-[15px] leading-7 whitespace-pre-wrap text-[#393939]">{item.body}</p>
+      {item.imagePaths && item.imagePaths.length > 0 && (
+        <div className="mb-5 flex flex-wrap gap-2">
+          {item.imagePaths.map((url, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={i} src={url} alt="" className="h-28 w-28 rounded-[2px] border border-[#16161614] object-cover" />
+          ))}
+        </div>
+      )}
+      <p className="m-0 mb-6 text-[13px] leading-5 text-[#161616]/50">
+        선생님 답변은 호형훈제수학연구소 사이트에서 확인해 주세요. 확인 후 &lsquo;완료&rsquo;로 표시하면 목록에서 정리돼요.
+      </p>
+      <button
+        onClick={del}
+        disabled={deleting}
+        className="w-full rounded-[2px] border border-[#c6c6c6] bg-white py-3.5 text-[15px] font-medium text-[#161616] disabled:opacity-50"
+      >
+        질문 삭제
+      </button>
     </Sheet>
   );
 }
@@ -503,9 +747,7 @@ function QuestionDetailSheet({ id, onClose }: { id: string; onClose: () => void 
       {detail.postStatus === "posted" && (
         <div className="mb-6 border-t border-[#16161614] pt-4">
           <div className="mb-3 flex items-center justify-between">
-            <p className="m-0 text-[13px] leading-5 text-[#161616]/50">
-              댓글 {detail.commentCount}개 · 새 댓글이 달리면 이 앱에서 알려드려요.
-            </p>
+            <p className="m-0 text-[13px] leading-5 text-[#161616]/50">댓글 {detail.commentCount}개 · 새 댓글이 달리면 이 앱에서 알려드려요.</p>
             <button onClick={loadComments} disabled={loadingComments} className="border-none bg-none p-0 text-[12px] text-[#161616]/50 underline underline-offset-[3px] disabled:opacity-50">
               새로고침
             </button>
