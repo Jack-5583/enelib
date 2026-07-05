@@ -8,6 +8,7 @@ export interface ResearchLab {
   id: string;
   name: string;
   clubid: string;
+  homeUrl: string;
   boards: CafeBoard[];
 }
 
@@ -18,12 +19,14 @@ export const RESEARCH_LABS: ResearchLab[] = [
     id: "singugeo",
     name: "신국어연구소",
     clubid: "31113195",
+    homeUrl: "https://cafe.naver.com/mysclass",
     boards: [{ id: "qna", name: "질문 게시판", menuid: "55" }],
   },
   {
     id: "jeongseokjun",
     name: "정석준연구소",
     clubid: "31342990",
+    homeUrl: "https://cafe.naver.com/jsjls",
     boards: [
       { id: "s1-crossout", name: "시즌1 크로스아웃", menuid: "55" },
       { id: "s1-decode", name: "시즌1 디코드", menuid: "56" },
@@ -48,6 +51,7 @@ export const RESEARCH_LABS: ResearchLab[] = [
     id: "sinseonggyu",
     name: "신성규수학연구소",
     clubid: "31112706",
+    homeUrl: "https://cafe.naver.com/ssgmath",
     boards: [
       { id: "sinseonhae", name: "신선해/신기해/신비해/신박해", menuid: "5" },
       { id: "ssg-union-mock", name: "SSG/UNION 모의고사", menuid: "8" },

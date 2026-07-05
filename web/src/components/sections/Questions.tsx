@@ -285,6 +285,7 @@ function QuestionForm({
   const [photos, setPhotos] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [joinUrl, setJoinUrl] = useState<string | null>(null);
 
   function onPickPhotos(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
@@ -310,6 +311,7 @@ function QuestionForm({
     if (!title.trim() || !content.trim() || saving) return;
     setSaving(true);
     setError(null);
+    setJoinUrl(null);
     const res = await fetch("/api/questions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -327,6 +329,7 @@ function QuestionForm({
       const d = await res.json().catch(() => ({}));
       if (d.needsNaverConnect) onNeedsNaver();
       setError(d.error || "등록에 실패했습니다.");
+      setJoinUrl(typeof d.joinUrl === "string" ? d.joinUrl : null);
       return;
     }
     onSaved();
@@ -392,7 +395,19 @@ function QuestionForm({
         <input type="file" accept="image/*" multiple className="hidden" onChange={onPickPhotos} />
       </label>
 
-      {error && <p className="m-0 mb-4 text-[13px] text-[#e0362f]">{error}</p>}
+      {error && (
+        <p className="m-0 mb-4 text-[13px] text-[#e0362f]">
+          {error}
+          {joinUrl && (
+            <>
+              {" "}
+              <a href={joinUrl} target="_blank" rel="noreferrer" className="underline underline-offset-[3px]">
+                카페 가입하러 가기 ↗
+              </a>
+            </>
+          )}
+        </p>
+      )}
 
       <div className="flex gap-3">
         <button onClick={onBack} className="w-[100px] flex-none rounded-[2px] border border-[#161616] bg-white py-3.5 text-[15px] font-medium text-[#161616]">

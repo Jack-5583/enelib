@@ -99,10 +99,17 @@ function extractNaverError(data: unknown): { code?: string; msg?: string } {
   return {};
 }
 
+/** The cafe join API only accepts Hangul, English letters, and digits in the
+ * nickname field — anything else (spaces, punctuation, emoji) gets rejected. */
+function sanitizeCafeNickname(nickname: string): string {
+  const cleaned = nickname.replace(/[^가-힣a-zA-Z0-9]/g, "");
+  return cleaned || `member${Math.floor(Math.random() * 100000)}`;
+}
+
 /** Join a cafe on behalf of the logged-in Naver member. Safe to call even if
  * already a member — Naver returns error code CA004 in that case, which we treat as success. */
 export async function joinNaverCafe(accessToken: string, clubid: string, nickname: string) {
-  const body = `nickname=${cp949PercentEncode(nickname)}`;
+  const body = `nickname=${cp949PercentEncode(sanitizeCafeNickname(nickname))}`;
   const res = await fetch(`https://openapi.naver.com/v1/cafe/${clubid}/members`, {
     method: "POST",
     headers: {

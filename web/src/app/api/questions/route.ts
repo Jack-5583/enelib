@@ -87,6 +87,26 @@ export async function POST(req: Request) {
 
   try {
     await joinNaverCafe(user.naverAccessToken, lab.clubid, user.naverNickname || user.name);
+  } catch (err) {
+    // The Open API's auto-join only works for cafes set to instant, no-approval join.
+    // Many study cafes require a manual application, which the API can't complete on
+    // the student's behalf — so send them to join it themselves, once, on Naver.
+    const message = err instanceof NaverCafeError ? err.message : "카페 가입에 실패했습니다.";
+    await prisma.question.update({
+      where: { id: question.id },
+      data: { postStatus: "failed", postError: message },
+    });
+    return NextResponse.json(
+      {
+        error: `${message} 먼저 네이버에서 해당 카페에 가입한 뒤 다시 시도해 주세요.`,
+        questionId: question.id,
+        joinUrl: lab.homeUrl,
+      },
+      { status: 502 }
+    );
+  }
+
+  try {
     const result = await postNaverCafeArticle({
       accessToken: user.naverAccessToken,
       clubid: lab.clubid,
