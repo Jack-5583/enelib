@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Chip } from "@/components/ui/Chip";
 import { Badge } from "@/components/ui/Badge";
 import { Sheet } from "@/components/ui/Sheet";
@@ -104,6 +105,20 @@ export function Grades({ studentId, readOnly = false, contextLabel }: { studentI
           </span>
           <span className="flex-none text-[16px] text-white/50">→</span>
         </button>
+      )}
+
+      {!readOnly && (
+        <Link
+          href="/omr"
+          className="mt-3 flex w-full items-center gap-3 border border-[#161616] bg-white px-4.5 py-3.5 text-left no-underline lg:px-6"
+        >
+          <span className="text-[18px] leading-none">🖊️</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] leading-5 font-semibold text-[#161616] lg:text-[16px]">OMR 채점</span>
+            <span className="block text-[12px] leading-4 text-[#161616]/50 lg:text-[13px]">시험지·학습자료 정답을 등록하고 OMR로 바로 채점</span>
+          </span>
+          <span className="flex-none text-[16px] text-[#161616]/30">→</span>
+        </Link>
       )}
 
       <div className="mt-5 flex flex-col gap-5 border border-[#16161614] p-4.5 lg:flex-row lg:items-center lg:gap-8 lg:p-7">
