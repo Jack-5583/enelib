@@ -11,6 +11,8 @@ export interface OmrQuestion {
   answer: string;
   /** Points awarded when correct. */
   points: number;
+  /** 공통과목 / 선택과목 grouping, as on the real sheet (undefined = single section). */
+  section?: "공통" | "선택";
 }
 
 export type OmrConfig = OmrQuestion[];
@@ -72,18 +74,25 @@ function numEq(a: string, b: string): boolean {
   return na === nb;
 }
 
+type Section = "공통" | "선택" | undefined;
+
 export const SUBJECT_PRESETS: { id: string; label: string; subject: string; build: () => OmrConfig }[] = [
-  { id: "korean", label: "국어 (45문항)", subject: "국어", build: () => choices(1, 45, 2) },
+  {
+    id: "korean",
+    label: "국어 (공통 1–34 · 선택 35–45)",
+    subject: "국어",
+    build: () => [...choices(1, 34, 2, "공통"), ...choices(35, 45, 2, "선택")],
+  },
   {
     id: "math",
     label: "수학 (공통 1–22 · 선택 23–30)",
     subject: "수학",
     // 공통: 1–15 choice, 16–22 단답형 / 선택: 23–28 choice, 29–30 단답형
     build: () => [
-      ...choices(1, 15, 3),
-      ...shorts(16, 22, 4),
-      ...choices(23, 28, 4),
-      ...shorts(29, 30, 4),
+      ...choices(1, 15, 3, "공통"),
+      ...shorts(16, 22, 4, "공통"),
+      ...choices(23, 28, 4, "선택"),
+      ...shorts(29, 30, 4, "선택"),
     ],
   },
   { id: "english", label: "영어 (45문항)", subject: "영어", build: () => choices(1, 45, 2) },
@@ -91,14 +100,14 @@ export const SUBJECT_PRESETS: { id: string; label: string; subject: string; buil
   { id: "tamgu", label: "탐구 (20문항)", subject: "탐구", build: () => choices(1, 20, 2) },
 ];
 
-function choices(from: number, to: number, points: number): OmrConfig {
+function choices(from: number, to: number, points: number, section?: Section): OmrConfig {
   const out: OmrConfig = [];
-  for (let n = from; n <= to; n += 1) out.push({ no: n, type: "choice", answer: "", points });
+  for (let n = from; n <= to; n += 1) out.push({ no: n, type: "choice", answer: "", points, section });
   return out;
 }
-function shorts(from: number, to: number, points: number): OmrConfig {
+function shorts(from: number, to: number, points: number, section?: Section): OmrConfig {
   const out: OmrConfig = [];
-  for (let n = from; n <= to; n += 1) out.push({ no: n, type: "short", answer: "", points });
+  for (let n = from; n <= to; n += 1) out.push({ no: n, type: "short", answer: "", points, section });
   return out;
 }
 
