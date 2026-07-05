@@ -68,6 +68,60 @@ function findCommentArrays(node: unknown, depth: number, out: Record<string, unk
   }
 }
 
+/** Diagnostic-only: walks the tree recording every array found (path, length, and
+ * the first element's keys) without filtering for "looks like a comment" — lets us
+ * see what shape the page's embedded data actually has when the heuristic in
+ * fetchComments comes back empty, without needing to dump the whole payload. */
+function collectArrayInfo(
+  node: unknown,
+  path: string,
+  depth: number,
+  out: { path: string; length: number; sampleKeys: string[] }[]
+): void {
+  if (depth > 14 || out.length > 300 || node == null || typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    if (node.length > 0) {
+      const first = node[0];
+      const sampleKeys = first && typeof first === "object" && !Array.isArray(first) ? Object.keys(first as object).slice(0, 25) : [];
+      out.push({ path, length: node.length, sampleKeys });
+      collectArrayInfo(first, `${path}[0]`, depth + 1, out);
+    }
+    return;
+  }
+  for (const key of Object.keys(node as Record<string, unknown>)) {
+    collectArrayInfo((node as Record<string, unknown>)[key], `${path}.${key}`, depth + 1, out);
+  }
+}
+
+export async function debugScrapeComments(clubid: string, articleId: string): Promise<Record<string, unknown>> {
+  const res = await fetch(getCommentsEmbedUrl(clubid, articleId), {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; enelib-bot/1.0)" },
+    cache: "no-store",
+  });
+  const html = await res.text();
+  const result: Record<string, unknown> = {
+    url: getCommentsEmbedUrl(clubid, articleId),
+    status: res.status,
+    htmlLength: html.length,
+  };
+  const nextDataMatch = /<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/.exec(html);
+  result.foundNextData = !!nextDataMatch;
+  if (!nextDataMatch) {
+    result.htmlSample = html.slice(0, 800);
+    return result;
+  }
+  try {
+    const nextData = JSON.parse(nextDataMatch[1]);
+    const arrays: { path: string; length: number; sampleKeys: string[] }[] = [];
+    collectArrayInfo(nextData, "root", 0, arrays);
+    result.arrayCandidates = arrays;
+  } catch (e) {
+    result.parseError = String(e);
+    result.nextDataSample = nextDataMatch[1].slice(0, 800);
+  }
+  return result;
+}
+
 /** Best-effort: returns the parsed comment list, or null if the page's markup
  * doesn't match the shape we expect this time (Naver can change it without notice). */
 export async function fetchComments(clubid: string, articleId: string): Promise<ScrapedComment[] | null> {

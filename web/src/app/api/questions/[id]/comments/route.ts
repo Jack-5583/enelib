@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { getResearchLab } from "@/lib/researchLabs";
-import { fetchComments } from "@/lib/naverScrape";
+import { fetchComments, debugScrapeComments } from "@/lib/naverScrape";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
@@ -17,6 +17,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const clubid = getResearchLab(question.labId)?.clubid;
   if (!clubid) return NextResponse.json({ comments: null });
+
+  const debug = new URL(req.url).searchParams.get("debug");
+  if (debug) {
+    const info = await debugScrapeComments(clubid, question.cafeArticleId);
+    return NextResponse.json(info);
+  }
 
   const comments = await fetchComments(clubid, question.cafeArticleId);
   return NextResponse.json({ comments });
