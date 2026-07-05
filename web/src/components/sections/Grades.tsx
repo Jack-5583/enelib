@@ -43,6 +43,7 @@ export function Grades({ studentId, readOnly = false, contextLabel }: { studentI
   const [data, setData] = useState<GradesData | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [owlPostOpen, setOwlPostOpen] = useState(false);
 
   function load(subj: string | null, type: string) {
     const params = new URLSearchParams();
@@ -90,6 +91,20 @@ export function Grades({ studentId, readOnly = false, contextLabel }: { studentI
           </Chip>
         ))}
       </div>
+
+      {!readOnly && (
+        <button
+          onClick={() => setOwlPostOpen(true)}
+          className="mt-4 flex w-full items-center gap-3 border border-[#161616] bg-[#161616] px-4.5 py-3.5 text-left text-white lg:px-6"
+        >
+          <span className="text-[18px] leading-none">🦉</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] leading-5 font-semibold lg:text-[16px]">부엉이포스트</span>
+            <span className="block text-[12px] leading-4 text-white/60 lg:text-[13px]">시대인재 개인 성적표를 앱에서 바로 확인</span>
+          </span>
+          <span className="flex-none text-[16px] text-white/50">→</span>
+        </button>
+      )}
 
       <div className="mt-5 flex flex-col gap-5 border border-[#16161614] p-4.5 lg:flex-row lg:items-center lg:gap-8 lg:p-7">
         <div className="flex-none lg:border-r lg:border-[#16161614] lg:pr-8">
@@ -186,6 +201,140 @@ export function Grades({ studentId, readOnly = false, contextLabel }: { studentI
           }}
         />
       )}
+
+      {owlPostOpen && <OwlPostSheet onClose={() => setOwlPostOpen(false)} />}
+    </div>
+  );
+}
+
+// 부엉이포스트 — the student's SDIJ 시대인재 grade report, fetched server-side with
+// their stored session and rendered verbatim in an isolated iframe. If no session
+// is stored (or it expired), we show a one-time capture form instead.
+function OwlPostSheet({ onClose }: { onClose: () => void }) {
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/sdij/account")
+      .then((r) => r.json())
+      .then((d: { configured?: boolean }) => {
+        if (active) setConfigured(!!d.configured);
+      })
+      .catch(() => {
+        if (active) setConfigured(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    function onMsg(e: MessageEvent) {
+      if (e.data === "sdij-reauth") setConfigured(false);
+    }
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+
+  return (
+    <Sheet open onClose={onClose} maxWidth={860}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-[20px] leading-none">🦉</span>
+          <h2 className="m-0 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px]">부엉이포스트</h2>
+        </div>
+        {configured && (
+          <button
+            onClick={() => setConfigured(false)}
+            className="border-none bg-none p-0 text-[13px] text-[#161616]/60 underline underline-offset-[3px]"
+          >
+            다시 인증
+          </button>
+        )}
+      </div>
+
+      {configured === null && <p className="m-0 py-12 text-center text-[14px] text-[#161616]/40">불러오는 중…</p>}
+
+      {configured === false && (
+        <OwlPostAuthForm
+          onDone={() => {
+            setConfigured(true);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      )}
+
+      {configured === true && (
+        <div className="mt-5 overflow-hidden border border-[#16161614]">
+          <iframe
+            key={reloadKey}
+            src="/api/sdij/owlpost"
+            title="부엉이포스트"
+            className="block h-[70vh] w-full border-0 bg-white"
+          />
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+function OwlPostAuthForm({ onDone }: { onDone: () => void }) {
+  const [curl, setCurl] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    if (!curl.trim()) return;
+    setSaving(true);
+    setError(null);
+    const res = await fetch("/api/sdij/account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ curl }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error || "인증에 실패했습니다.");
+      return;
+    }
+    onDone();
+  }
+
+  return (
+    <div className="mt-5">
+      <div className="border border-[#16161614] bg-[#f4f4f4] px-4.5 py-4 text-[13px] leading-6 text-[#393939] lg:text-[14px]">
+        <p className="m-0 mb-2 font-semibold text-[#161616]">시대인재 인증 방법 (최초 1회)</p>
+        <ol className="m-0 list-decimal pl-5">
+          <li>PC 크롬에서 시대인재 <span className="font-medium">부엉이포스트</span> 페이지에 로그인/인증합니다.</li>
+          <li>
+            F12(개발자도구) → <span className="font-medium">Network</span> 탭을 연 뒤 회차/과목을 한 번 바꿔 <span className="font-mono">my_std.asp</span> 요청을 찾습니다.
+          </li>
+          <li>
+            그 요청을 우클릭 → <span className="font-medium">Copy → Copy as cURL</span> 로 복사합니다.
+          </li>
+          <li>아래에 붙여넣고 저장하면, 이후에는 인증 없이 바로 성적표가 보입니다.</li>
+        </ol>
+      </div>
+
+      <textarea
+        value={curl}
+        onChange={(e) => setCurl(e.target.value)}
+        rows={6}
+        placeholder="curl 'https://www.sdij.com/aca/owlPost/tail/my_std.asp' -H 'cookie: ASPSESSIONID...' --data-raw 'tabCode=12&authIdx=...'"
+        className="mt-4 w-full resize-none border border-[#16161614] p-3 font-mono text-[12px] leading-5 text-[#161616] outline-none"
+      />
+
+      {error && <p className="m-0 mt-3 text-[13px] text-[#e0362f]">{error}</p>}
+
+      <button
+        onClick={save}
+        disabled={saving || !curl.trim()}
+        className="mt-4 w-full rounded-[2px] border-none bg-[#161616] py-3.5 text-[16px] font-semibold text-white disabled:opacity-50"
+      >
+        {saving ? "확인 중…" : "인증 정보 저장"}
+      </button>
     </div>
   );
 }

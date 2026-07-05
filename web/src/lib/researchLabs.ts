@@ -10,8 +10,9 @@ export interface ResearchLab {
   /** Subject is fixed per lab and shown on the question automatically. */
   subject: string;
   /** "naver" labs post to a Naver Cafe via the Open API; "hohoon" posts to
-   * hohoonmath.com via its login/captcha flow. */
-  kind: "naver" | "hohoon";
+   * hohoonmath.com via its login/captcha flow; "inclass" posts to an inclass
+   * board (gomathtop.inclass.co.kr) via a shared cookie session. */
+  kind: "naver" | "hohoon" | "inclass";
   clubid?: string;
   homeUrl?: string;
   boards: CafeBoard[];
@@ -82,6 +83,14 @@ export const RESEARCH_LABS: ResearchLab[] = [
     kind: "hohoon",
     homeUrl: "https://www.hohoonmath.com/weekly/studyquestions.html",
     boards: [{ id: "studyquestions", name: "학습질문", menuid: "" }],
+  },
+  {
+    id: "parkjongmin",
+    name: "박종민수학연구소",
+    subject: "수학",
+    kind: "inclass",
+    homeUrl: "https://gomathtop.inclass.co.kr/boardQnAS/list/?siteMenuIdx=137567",
+    boards: [{ id: "qna", name: "수학 질문", menuid: "137567" }],
   },
 ];
 

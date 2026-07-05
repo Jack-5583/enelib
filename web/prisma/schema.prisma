@@ -56,6 +56,8 @@ model User {
   hohoonAccount   HohoonAccount?
   hohoonDrafts    HohoonDraft[]
   hohoonQuestions HohoonQuestion[]
+  sdijAccount     SdijAccount?
+  inclassQuestions InclassQuestion[]
   camSessions  CamSession[]
   timelineEntries TimelineEntry[]
   studentAuthCodes StudentAuthCode[]
@@ -385,6 +387,42 @@ model HohoonDraft {
 /// A study question a student posted to hohoonmath, mirrored locally so we can
 /// show it in-app and (later) surface replies.
 model HohoonQuestion {
+  id             String   @id @default(cuid())
+  ownerId        String
+  owner          User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  subject        String
+  body           String   @db.Text
+  imagePaths     String[] @default([])
+  articleId      String?
+  articleUrl     String?
+  answerText     String?  @db.Text
+  answeredAt     DateTime?
+  commentCount   Int      @default(0)
+  hasUnseenReply Boolean  @default(false)
+  done           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([ownerId])
+}
+
+/// The student's authenticated SDIJ (시대인재) session, captured once so we can
+/// replay the 부엉이 포스트 grade report server-side without re-auth. Auth is ASP
+/// session cookies + the studeepForm hidden fields (authIdx / UserDate), both
+/// stored encrypted and refreshed from each successful response.
+model SdijAccount {
+  id        String   @id @default(cuid())
+  ownerId   String   @unique
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  cookieEnc String   @db.Text
+  bodyEnc   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// A study question posted to 박종민수학연구소 (gomathtop.inclass.co.kr),
+/// mirrored locally. Posting goes through one shared inclass session, like the
+/// 호형훈제 integration.
+model InclassQuestion {
   id             String   @id @default(cuid())
   ownerId        String
   owner          User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)

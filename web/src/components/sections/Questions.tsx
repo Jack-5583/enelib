@@ -14,13 +14,13 @@ interface LabOption {
   id: string;
   name: string;
   subject: string;
-  kind: "naver" | "hohoon";
+  kind: "naver" | "hohoon" | "inclass";
   boards: BoardOption[];
 }
 
 interface QuestionItem {
   id: string;
-  kind: "naver" | "hohoon";
+  kind: "naver" | "hohoon" | "inclass";
   labName: string;
   subject: string;
   title: string;
@@ -78,10 +78,12 @@ export function Questions() {
     Promise.all([
       fetch("/api/questions").then((r) => r.json()).catch(() => []),
       fetch("/api/hohoon/questions").then((r) => r.json()).catch(() => []),
-    ]).then(([naver, hohoon]) => {
+      fetch("/api/inclass/questions").then((r) => r.json()).catch(() => []),
+    ]).then(([naver, hohoon, inclass]) => {
       const a: QuestionItem[] = (Array.isArray(naver) ? naver : []).map((q) => ({ ...q, kind: "naver" as const }));
       const b: QuestionItem[] = Array.isArray(hohoon) ? hohoon : [];
-      setQuestions([...a, ...b].sort((x, y) => (x.createdAt < y.createdAt ? 1 : -1)));
+      const c: QuestionItem[] = Array.isArray(inclass) ? inclass : [];
+      setQuestions([...a, ...b, ...c].sort((x, y) => (x.createdAt < y.createdAt ? 1 : -1)));
     });
   }
 
@@ -93,7 +95,12 @@ export function Questions() {
   }, []);
 
   async function toggleDone(q: QuestionItem) {
-    const url = q.kind === "hohoon" ? `/api/hohoon/questions/${q.id}` : `/api/questions/${q.id}`;
+    const url =
+      q.kind === "hohoon"
+        ? `/api/hohoon/questions/${q.id}`
+        : q.kind === "inclass"
+          ? `/api/inclass/questions/${q.id}`
+          : `/api/questions/${q.id}`;
     setQuestions((prev) => prev?.map((x) => (x.id === q.id ? { ...x, done: !x.done } : x)) ?? prev);
     await fetch(url, {
       method: "PATCH",
@@ -199,6 +206,15 @@ export function Questions() {
           }}
         />
       )}
+      {detail && detail.kind === "inclass" && (
+        <InclassDetailSheet
+          item={detail}
+          onClose={() => {
+            setDetail(null);
+            loadQuestions();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -262,6 +278,11 @@ function AddQuestionSheet({
   // hohoonmath uses its own login/captcha compose flow.
   if (lab.kind === "hohoon") {
     return <HohoonComposeForm labName={lab.name} subject={lab.subject} onBack={() => setLabId(null)} onClose={onClose} onSaved={onSaved} />;
+  }
+
+  // inclass boards post through a shared session — a plain title/body form.
+  if (lab.kind === "inclass") {
+    return <InclassComposeForm labName={lab.name} subject={lab.subject} boardName={lab.boards[0]?.name ?? "수학 질문"} onBack={() => setLabId(null)} onClose={onClose} onSaved={onSaved} />;
   }
 
   if (!boardId) {
@@ -686,6 +707,160 @@ function HohoonDetailSheet({ item, onClose }: { item: QuestionItem; onClose: () 
           ))}
         </div>
       )}
+
+      <div className="mb-6 border-t border-[#16161614] pt-4">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="m-0 text-[13px] leading-5 font-semibold text-[#161616]">선생님 답변</p>
+          <button onClick={loadAnswer} disabled={loadingAnswer} className="border-none bg-none p-0 text-[12px] text-[#161616]/50 underline underline-offset-[3px] disabled:opacity-50">
+            새로고침
+          </button>
+        </div>
+        {answer ? (
+          <p className="m-0 text-[14px] leading-6 whitespace-pre-wrap text-[#393939]">{answer}</p>
+        ) : loadingAnswer ? (
+          <p className="m-0 py-4 text-center text-[13px] text-[#161616]/40">답변 확인 중…</p>
+        ) : (
+          <p className="m-0 py-4 text-center text-[13px] text-[#161616]/40">아직 선생님 답변이 없습니다.</p>
+        )}
+        {item.articleUrl && (
+          <a href={item.articleUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[12px] text-[#161616]/40 underline underline-offset-[3px]">
+            사이트에서 직접 확인하기 ↗
+          </a>
+        )}
+      </div>
+
+      <button
+        onClick={del}
+        disabled={deleting}
+        className="w-full rounded-[2px] border border-[#c6c6c6] bg-white py-3.5 text-[15px] font-medium text-[#161616] disabled:opacity-50"
+      >
+        질문 삭제
+      </button>
+    </Sheet>
+  );
+}
+
+function InclassComposeForm({
+  labName,
+  subject,
+  boardName,
+  onBack,
+  onClose,
+  onSaved,
+}: {
+  labName: string;
+  subject: string;
+  boardName: string;
+  onBack: () => void;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    if (!title.trim() || !body.trim() || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    const res = await fetch("/api/inclass/questions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subject: title.trim(), body: body.trim() }),
+    });
+    setSubmitting(false);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error || "질문 등록에 실패했습니다.");
+      return;
+    }
+    onSaved();
+  }
+
+  return (
+    <Sheet open onClose={onClose} maxWidth={560}>
+      <h2 className="m-0 mb-1 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">질문 작성</h2>
+      <p className="m-0 mb-6 text-[14px] leading-6 text-[#161616]/50 lg:text-[16px]">
+        <span className="font-semibold text-[#161616]">{labName}</span> · {boardName} · {subject}
+      </p>
+
+      <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">제목</p>
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="예) 3회 15번 풀이 질문"
+        className="mb-5 w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none"
+      />
+
+      <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">내용</p>
+      <textarea
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        rows={7}
+        placeholder="질문 내용을 자세히 적어주세요."
+        className="mb-5 w-full resize-none border border-[#16161614] bg-transparent p-3 text-[14px] leading-6 text-[#161616] outline-none"
+      />
+
+      {error && <p className="m-0 mb-4 text-[13px] text-[#e0362f]">{error}</p>}
+
+      <div className="flex gap-3">
+        <button onClick={onBack} className="w-[100px] flex-none rounded-[2px] border border-[#161616] bg-white py-3.5 text-[15px] font-medium text-[#161616]">
+          뒤로
+        </button>
+        <button onClick={submit} disabled={submitting} className="flex-1 rounded-[2px] border-none bg-[#161616] py-3.5 text-[16px] font-semibold text-white disabled:opacity-50">
+          {submitting ? "등록 중…" : "질문 등록하기"}
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+function InclassDetailSheet({ item, onClose }: { item: QuestionItem; onClose: () => void }) {
+  const [deleting, setDeleting] = useState(false);
+  const [answer, setAnswer] = useState<string | null>(item.answerText ?? null);
+  const [loadingAnswer, setLoadingAnswer] = useState(false);
+
+  function loadAnswer() {
+    setLoadingAnswer(true);
+    fetch(`/api/inclass/questions/${item.id}/refresh`, { method: "POST" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (typeof d.answerText === "string") setAnswer(d.answerText);
+      })
+      .finally(() => setLoadingAnswer(false));
+  }
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/inclass/questions/${item.id}/refresh`, { method: "POST" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (active && typeof d.answerText === "string") setAnswer(d.answerText);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function del() {
+    if (!window.confirm("이 질문을 삭제할까요? (박종민수학연구소에 이미 올라간 글은 앱에서 삭제해도 사이트에는 그대로 남아있습니다.)")) return;
+    setDeleting(true);
+    await fetch(`/api/inclass/questions/${item.id}`, { method: "DELETE" });
+    setDeleting(false);
+    onClose();
+  }
+
+  return (
+    <Sheet open onClose={onClose} maxWidth={620}>
+      <div className="mb-4 flex items-center gap-2">
+        <Badge>{item.labName}</Badge>
+        <Badge>{item.subject}</Badge>
+      </div>
+      <h2 className="m-0 mb-4 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">{item.title}</h2>
+      <p className="m-0 mb-5 text-[15px] leading-7 whitespace-pre-wrap text-[#393939]">{item.body}</p>
 
       <div className="mb-6 border-t border-[#16161614] pt-4">
         <div className="mb-3 flex items-center justify-between">
