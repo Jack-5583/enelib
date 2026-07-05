@@ -136,9 +136,12 @@ export async function postNaverCafeArticle(params: PostArticleParams): Promise<P
   form.append("content", naverFormEncode(params.content));
   form.append("openyn", String(params.openyn ?? true));
   form.append("replyyn", "true");
-  for (const img of params.images) {
-    form.append("image", new Blob([new Uint8Array(img.buffer)], { type: img.contentType }), img.filename);
-  }
+  // Naver's PHP/C# reference examples both index the file field as image[0], image[1], ...
+  // (only the Node.js example repeats a bare "image" field, which looks like an artifact
+  // of that example's http library rather than the actual expected wire format).
+  params.images.forEach((img, i) => {
+    form.append(`image[${i}]`, new Blob([new Uint8Array(img.buffer)], { type: img.contentType }), img.filename);
+  });
 
   const res = await fetch(`https://openapi.naver.com/v1/cafe/${params.clubid}/menu/${params.menuid}/articles`, {
     method: "POST",

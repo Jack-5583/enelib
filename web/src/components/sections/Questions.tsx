@@ -77,6 +77,8 @@ export function Questions() {
   useEffect(() => {
     loadMe();
     loadQuestions();
+    const interval = setInterval(loadQuestions, 60_000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -453,6 +455,14 @@ function QuestionDetailSheet({ id, onClose }: { id: string; onClose: () => void 
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (detail?.postStatus === "posted") loadComments();
+    }, 60_000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, detail?.postStatus]);
 
   async function del() {
     if (!window.confirm("이 질문을 삭제할까요? (카페에 이미 올라간 글은 앱에서 삭제해도 카페에는 그대로 남아있습니다.)")) return;

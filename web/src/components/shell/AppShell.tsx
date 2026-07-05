@@ -34,10 +34,15 @@ export function AppShell({ user, children }: { user: SessionUserDTO; children: R
   const [hasUnseenQuestionReply, setHasUnseenQuestionReply] = useState(false);
   useEffect(() => {
     if (isParent) return;
-    fetch("/api/questions/unseen-count")
-      .then((r) => r.json())
-      .then((d) => setHasUnseenQuestionReply((d.count ?? 0) > 0))
-      .catch(() => {});
+    function checkUnseen() {
+      fetch("/api/questions/unseen-count")
+        .then((r) => r.json())
+        .then((d) => setHasUnseenQuestionReply((d.count ?? 0) > 0))
+        .catch(() => {});
+    }
+    checkUnseen();
+    const interval = setInterval(checkUnseen, 60_000);
+    return () => clearInterval(interval);
   }, [isParent]);
 
   return (
