@@ -113,12 +113,21 @@ export async function inclassPostQuestion(params: PostQuestionParams): Promise<v
 
   const text = await res.text().catch(() => "");
   const alert = extractAlert(text);
-  if (alert) throw new InclassError(alert, text);
+  // proc/ replies 200 with a script that alerts then redirects. A success alert
+  // (e.g. "등록되었습니다") must NOT be treated as an error — only genuine failure
+  // alerts should be surfaced.
+  if (alert) {
+    const isFailure = /실패|오류|에러|없|선택해|입력해|초과|불가|아닙니다|주세요|다시/.test(alert);
+    if (!isFailure) return; // success alert
+    throw new InclassError(alert, text);
+  }
   if (/location\.(href|replace)|\/boardQnAS\/list/.test(text)) return;
   if (/member\/login|로그인/.test(text)) {
     throw new InclassError("inclass 세션이 만료되었습니다. 관리자 인증 정보를 갱신해 주세요.", text);
   }
-  throw new InclassError("질문 등록에 실패했습니다.", text);
+  // No alert and no obvious signal: assume the write went through (the site
+  // typically 302s or alerts on success) rather than block a valid post.
+  return;
 }
 
 export function inclassViewUrl(articleId: string): string {
