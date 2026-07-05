@@ -1,5 +1,4 @@
 import "server-only";
-import iconv from "iconv-lite";
 
 const CLIENT_ID = process.env.NAVER_CLIENT_ID || "";
 const CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET || "";
@@ -123,10 +122,18 @@ export function getCommentsEmbedUrl(clubid: string, articleId: string): string {
   return `https://m.cafe.naver.com/ca-fe/web/cafes/${clubid}/articles/${articleId}/comments`;
 }
 
+/** Naver's own multipart write example (APIExamCafePostMultipart.java / MultipartUtil.java)
+ * sends subject/content as UTF-8 percent-encoded text fields — not re-encoded to any
+ * legacy charset. application/x-www-form-urlencoded style (space -> "+") to match
+ * java.net.URLEncoder.encode(str, "UTF-8"), which is what that reference example uses. */
+function naverFormEncode(str: string): string {
+  return encodeURIComponent(str).replace(/%20/g, "+");
+}
+
 export async function postNaverCafeArticle(params: PostArticleParams): Promise<PostArticleResult> {
   const form = new FormData();
-  form.append("subject", new Blob([new Uint8Array(iconv.encode(params.subject, "cp949"))]));
-  form.append("content", new Blob([new Uint8Array(iconv.encode(params.content, "cp949"))]));
+  form.append("subject", naverFormEncode(params.subject));
+  form.append("content", naverFormEncode(params.content));
   form.append("openyn", String(params.openyn ?? true));
   form.append("replyyn", "true");
   for (const img of params.images) {
