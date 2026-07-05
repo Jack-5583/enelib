@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fetchCommentCount } from "@/lib/naverScrape";
+import { getResearchLab } from "@/lib/researchLabs";
 
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -10,7 +11,7 @@ export async function GET(req: Request) {
   }
 
   const questions = await prisma.question.findMany({
-    where: { postStatus: "posted", cafeArticleUrl: { not: null } },
+    where: { postStatus: "posted", cafeArticleId: { not: null } },
     orderBy: { createdAt: "desc" },
     take: 100,
   });
@@ -18,8 +19,10 @@ export async function GET(req: Request) {
   let checked = 0;
   let updated = 0;
   for (const q of questions) {
+    const clubid = getResearchLab(q.labId)?.clubid;
+    if (!clubid) continue;
     checked += 1;
-    const count = await fetchCommentCount(q.cafeArticleUrl!);
+    const count = await fetchCommentCount(clubid, q.cafeArticleId!);
     if (count != null && count > q.commentCount) {
       updated += 1;
       await prisma.question.update({

@@ -9,9 +9,9 @@ import { getCommentsEmbedUrl } from "@/lib/naver";
  * Naver can change this markup at any time without notice, so a null return
  * just means "couldn't tell this time," not "zero comments."
  */
-export async function fetchCommentCount(articleUrl: string): Promise<number | null> {
+export async function fetchCommentCount(clubid: string, articleId: string): Promise<number | null> {
   try {
-    const res = await fetch(getCommentsEmbedUrl(articleUrl), {
+    const res = await fetch(getCommentsEmbedUrl(clubid, articleId), {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; enelib-bot/1.0)" },
       cache: "no-store",
     });

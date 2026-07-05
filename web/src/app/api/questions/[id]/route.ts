@@ -16,6 +16,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     await prisma.question.update({ where: { id }, data: { hasUnseenReply: false } });
   }
 
+  const clubid = getResearchLab(question.labId)?.clubid;
+
   return NextResponse.json({
     id: question.id,
     labId: question.labId,
@@ -28,7 +30,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     postStatus: question.postStatus,
     postError: question.postError,
     cafeArticleUrl: question.cafeArticleUrl,
-    commentsEmbedUrl: question.cafeArticleUrl ? getCommentsEmbedUrl(question.cafeArticleUrl) : null,
+    commentsEmbedUrl: clubid && question.cafeArticleId ? getCommentsEmbedUrl(clubid, question.cafeArticleId) : null,
     commentCount: question.commentCount,
     createdAt: question.createdAt,
   });

@@ -137,9 +137,10 @@ interface PostArticleResult {
 }
 
 /** The mobile "comments only" view of a public article — light enough to embed
- * in an iframe and to scrape for a comment count, without needing a Naver login. */
-export function getCommentsEmbedUrl(articleUrl: string): string {
-  return articleUrl.replace("cafe.naver.com", "m.cafe.naver.com").replace(/\/?$/, "/comments");
+ * in an iframe and to scrape for a comment count, without needing a Naver login.
+ * Confirmed real shape: https://m.cafe.naver.com/ca-fe/web/cafes/{clubid}/articles/{articleId}/comments */
+export function getCommentsEmbedUrl(clubid: string, articleId: string): string {
+  return `https://m.cafe.naver.com/ca-fe/web/cafes/${clubid}/articles/${articleId}/comments`;
 }
 
 export async function postNaverCafeArticle(params: PostArticleParams): Promise<PostArticleResult> {
