@@ -271,6 +271,12 @@ function TimelineView({ todos }: { todos: TodoOption[] }) {
   }
   useEffect(load, [viewDate]);
 
+  async function deleteEntry(id: string) {
+    if (!window.confirm("이 학습 인증 기록을 삭제할까요?")) return;
+    await fetch(`/api/camstudy/timeline/${id}`, { method: "DELETE" });
+    load();
+  }
+
   const isToday = viewDate === todayIso();
   const totalLabel = entries.length ? `${entries.length}회` : "0회";
 
@@ -354,12 +360,20 @@ function TimelineView({ todos }: { todos: TodoOption[] }) {
                       ))}
                     </div>
                   )}
-                  <button
-                    onClick={() => setMemoEntry(e)}
-                    className="mt-4 self-start rounded-[2px] border border-[#161616] bg-white px-4.5 py-2.5 text-[14px] font-medium text-[#161616]"
-                  >
-                    ✎ {e.hasMemo ? "손글씨 메모 수정" : "손글씨 메모 추가"}
-                  </button>
+                  <div className="mt-4 flex items-center gap-3">
+                    <button
+                      onClick={() => setMemoEntry(e)}
+                      className="self-start rounded-[2px] border border-[#161616] bg-white px-4.5 py-2.5 text-[14px] font-medium text-[#161616]"
+                    >
+                      ✎ {e.hasMemo ? "손글씨 메모 수정" : "손글씨 메모 추가"}
+                    </button>
+                    <button
+                      onClick={() => deleteEntry(e.id)}
+                      className="self-start border-none bg-none p-0 text-[13px] text-[#161616]/45 underline underline-offset-[3px]"
+                    >
+                      삭제
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -406,6 +420,9 @@ function ManualUploadSheet({
   onSaved: () => void;
 }) {
   const [todoId, setTodoId] = useState("");
+  const [time, setTime] = useState(() =>
+    new Date().toLocaleTimeString("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit" })
+  );
   const [photos, setPhotos] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -445,8 +462,9 @@ function ManualUploadSheet({
         subject: todo?.subject,
         todoTitle: todo?.title,
         photoUrls: photos,
-        // Land in the currently browsed day's timeline (KST noon avoids any day-boundary edge cases).
-        segmentStart: `${viewDate}T03:00:00.000Z`,
+        // Place the entry at the chosen KST time on the browsed day; fall back
+        // to KST noon if the time was cleared.
+        segmentStart: time ? `${viewDate}T${time}:00+09:00` : `${viewDate}T03:00:00.000Z`,
       }),
     });
     setSaving(false);
@@ -479,6 +497,14 @@ function ManualUploadSheet({
           </select>
         </>
       )}
+
+      <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">시간</p>
+      <input
+        type="time"
+        value={time}
+        onChange={(e) => setTime(e.target.value)}
+        className="mb-5 w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none"
+      />
 
       <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">인증 사진 {photos.length > 0 && `(${photos.length}장)`}</p>
       {photos.length > 0 && (
