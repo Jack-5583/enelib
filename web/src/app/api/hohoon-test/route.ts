@@ -94,14 +94,14 @@ export async function POST(req: Request) {
   const code = String(form.get("code") || "");
   if (!cookie) return NextResponse.json({ error: "session lost" }, { status: 400 });
 
-  const fields = new URLSearchParams({
+  const fp = new URLSearchParams({
     code: "",
     subp: "",
     bbsid: "studyquestions",
     gbn: "new",
     ix: "",
     returl: "/weekly/studyquestions.html",
-    oldfilecnt: "0",
+    oldfilecnt: "",
     imgcode: String(Date.now()),
     isopen: "Y",
     name: "",
@@ -112,7 +112,11 @@ export async function POST(req: Request) {
     ir1: ".",
     contents: ".",
     security_code1: code,
-  }).toString();
+  });
+  // The browser's file <select multiple> always submits one placeholder entry;
+  // the server computes bbs_filecnt = count(attfile) - 1, so we must send it too.
+  fp.append("attfile[]", "");
+  const fields = fp.toString();
   const r2 = await fetch(`${BASE}/board/pb_board_ok.php`, {
     method: "POST",
     headers: {
