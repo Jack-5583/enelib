@@ -40,7 +40,17 @@ const schema = z.object({
   durationLabel: z.string().optional(),
   photoUrls: z.array(z.string()).default([]),
   segmentStart: z.string().optional(),
+  segmentEnd: z.string().optional(),
 });
+
+function formatDuration(ms: number): string | null {
+  const mins = Math.round(ms / 60000);
+  if (mins <= 0) return null;
+  if (mins < 60) return `${mins}분`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}시간 ${m}분` : `${h}시간`;
+}
 
 export async function POST(req: Request) {
   const user = await getSessionUser();
@@ -49,10 +59,19 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
 
-  // Auto-captures (from a live session) always end "now"; manual multi-photo
-  // uploads have no real duration, so they just end when they start.
   const capturedAt = parsed.data.segmentStart ? new Date(parsed.data.segmentStart) : new Date();
-  const endedAt = parsed.data.camSessionId ? new Date() : capturedAt;
+  // A manual end time wins; else a live session ends "now"; else no span.
+  const endedAt = parsed.data.segmentEnd
+    ? new Date(parsed.data.segmentEnd)
+    : parsed.data.camSessionId
+      ? new Date()
+      : capturedAt;
+
+  // Derive a focus-duration label from a manual start/end span if none was given.
+  let durationLabel = parsed.data.durationLabel || null;
+  if (!durationLabel && endedAt.getTime() > capturedAt.getTime()) {
+    durationLabel = formatDuration(endedAt.getTime() - capturedAt.getTime());
+  }
 
   const entry = await prisma.timelineEntry.create({
     data: {
@@ -60,7 +79,7 @@ export async function POST(req: Request) {
       camSessionId: parsed.data.camSessionId || null,
       subject: parsed.data.subject || null,
       todoTitle: parsed.data.todoTitle || null,
-      durationLabel: parsed.data.durationLabel || null,
+      durationLabel,
       photoUrls: parsed.data.photoUrls,
       capturedAt,
       endedAt,

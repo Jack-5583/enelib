@@ -420,9 +420,9 @@ function ManualUploadSheet({
   onSaved: () => void;
 }) {
   const [todoId, setTodoId] = useState("");
-  const [time, setTime] = useState(() =>
-    new Date().toLocaleTimeString("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit" })
-  );
+  const nowKstHm = () => new Date().toLocaleTimeString("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit" });
+  const [time, setTime] = useState(nowKstHm);
+  const [endTime, setEndTime] = useState(nowKstHm);
   const [photos, setPhotos] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -462,9 +462,10 @@ function ManualUploadSheet({
         subject: todo?.subject,
         todoTitle: todo?.title,
         photoUrls: photos,
-        // Place the entry at the chosen KST time on the browsed day; fall back
-        // to KST noon if the time was cleared.
+        // Place the entry at the chosen KST start/end times on the browsed day;
+        // fall back to KST noon if the start time was cleared.
         segmentStart: time ? `${viewDate}T${time}:00+09:00` : `${viewDate}T03:00:00.000Z`,
+        segmentEnd: endTime ? `${viewDate}T${endTime}:00+09:00` : undefined,
       }),
     });
     setSaving(false);
@@ -498,13 +499,26 @@ function ManualUploadSheet({
         </>
       )}
 
-      <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">시간</p>
-      <input
-        type="time"
-        value={time}
-        onChange={(e) => setTime(e.target.value)}
-        className="mb-5 w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none"
-      />
+      <div className="mb-5 flex gap-4">
+        <div className="flex-1">
+          <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">시작 시간</p>
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            className="w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none"
+          />
+        </div>
+        <div className="flex-1">
+          <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">끝나는 시간</p>
+          <input
+            type="time"
+            value={endTime}
+            onChange={(e) => setEndTime(e.target.value)}
+            className="w-full border-0 border-b border-[#161616]/50 bg-transparent py-3 text-[16px] text-[#161616] outline-none"
+          />
+        </div>
+      </div>
 
       <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">인증 사진 {photos.length > 0 && `(${photos.length}장)`}</p>
       {photos.length > 0 && (
