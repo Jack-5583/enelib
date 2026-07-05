@@ -757,17 +757,44 @@ function InclassComposeForm({
 }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [attachments, setAttachments] = useState<{ fileUpNM: string; fileKey: string; url: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  async function onPickPhotos(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (files.length === 0) return;
+    setUploading(true);
+    setError(null);
+    for (const file of files) {
+      if (attachments.length >= 3) {
+        setError("사진은 최대 3장까지 첨부할 수 있습니다.");
+        break;
+      }
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/inclass/upload", { method: "POST", body: fd });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.url) setAttachments((prev) => [...prev, d]);
+      else setError(d.error || "이미지 업로드에 실패했습니다.");
+    }
+    setUploading(false);
+  }
+
+  function removePhoto(i: number) {
+    setAttachments((prev) => prev.filter((_, j) => j !== i));
+  }
+
   async function submit() {
-    if (!title.trim() || !body.trim() || submitting) return;
+    if (!title.trim() || !body.trim() || submitting || uploading) return;
     setSubmitting(true);
     setError(null);
     const res = await fetch("/api/inclass/questions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subject: title.trim(), body: body.trim() }),
+      body: JSON.stringify({ subject: title.trim(), body: body.trim(), attachments }),
     });
     setSubmitting(false);
     if (!res.ok) {
@@ -802,13 +829,37 @@ function InclassComposeForm({
         className="mb-5 w-full resize-none border border-[#16161614] bg-transparent p-3 text-[14px] leading-6 text-[#161616] outline-none"
       />
 
+      <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">사진 첨부 {attachments.length > 0 && `(${attachments.length}/3)`}</p>
+      {attachments.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {attachments.map((a, i) => (
+            <div key={i} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={a.url} alt="" className="h-20 w-20 rounded-[2px] border border-[#16161614] object-cover" />
+              <button
+                onClick={() => removePhoto(i)}
+                className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full border-none bg-[#161616] text-[12px] leading-none text-white"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {attachments.length < 3 && (
+        <label className="mb-6 flex w-full cursor-pointer items-center justify-center border border-dashed border-[#c6c6c6] py-3 text-[14px] text-[#161616]/60">
+          {uploading ? "업로드 중…" : "사진 선택 (최대 3장)"}
+          <input type="file" accept="image/*" multiple className="hidden" onChange={onPickPhotos} disabled={uploading} />
+        </label>
+      )}
+
       {error && <p className="m-0 mb-4 text-[13px] text-[#e0362f]">{error}</p>}
 
       <div className="flex gap-3">
         <button onClick={onBack} className="w-[100px] flex-none rounded-[2px] border border-[#161616] bg-white py-3.5 text-[15px] font-medium text-[#161616]">
           뒤로
         </button>
-        <button onClick={submit} disabled={submitting} className="flex-1 rounded-[2px] border-none bg-[#161616] py-3.5 text-[16px] font-semibold text-white disabled:opacity-50">
+        <button onClick={submit} disabled={submitting || uploading} className="flex-1 rounded-[2px] border-none bg-[#161616] py-3.5 text-[16px] font-semibold text-white disabled:opacity-50">
           {submitting ? "등록 중…" : "질문 등록하기"}
         </button>
       </div>
@@ -861,6 +912,14 @@ function InclassDetailSheet({ item, onClose }: { item: QuestionItem; onClose: ()
       </div>
       <h2 className="m-0 mb-4 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">{item.title}</h2>
       <p className="m-0 mb-5 text-[15px] leading-7 whitespace-pre-wrap text-[#393939]">{item.body}</p>
+      {item.imagePaths && item.imagePaths.length > 0 && (
+        <div className="mb-5 flex flex-wrap gap-2">
+          {item.imagePaths.map((url, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={i} src={url} alt="" className="h-28 w-28 rounded-[2px] border border-[#16161614] object-cover" />
+          ))}
+        </div>
+      )}
 
       <div className="mb-6 border-t border-[#16161614] pt-4">
         <div className="mb-3 flex items-center justify-between">

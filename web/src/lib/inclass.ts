@@ -11,6 +11,10 @@ import "server-only";
 const BASE = "https://gomathtop.inclass.co.kr";
 // The "수학 질문" board (boardQnAS) menu id, from the write/list URLs.
 const SITE_MENU_IDX = "137567";
+// File uploads go to a separate JWT-authed API and land in this S3 bucket.
+const API = "https://api.inclass.kr";
+const S3_BUCKET = "https://inclass-file.s3.ap-northeast-2.amazonaws.com/";
+const FILE_FOLDER = "board/qna";
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
@@ -66,11 +70,75 @@ export function buildInclassContentHtml(text: string): string {
     .join("");
 }
 
+/** A photo attachment, already uploaded to inclass and moved to its permanent
+ * location, ready to be referenced in the write form. */
+export interface InclassAttachment {
+  /** fileUpNM form value — the permanent key's filename part. */
+  fileUpNM: string;
+  /** fileKey form value — the full permanent key (board/qna/<uuid>). */
+  fileKey: string;
+  /** Public S3 URL, for in-app preview. */
+  url: string;
+}
+
 interface PostQuestionParams {
   title: string;
   contentHtml: string;
   /** false → 공개 질문 (default; needed so we can find & read it back); true → 비공개. */
   secret?: boolean;
+  attachments?: InclassAttachment[];
+}
+
+/** Fetch a fresh short-lived (≈10s) upload token. The board mints it from the
+ * session cookie via token.asp and returns it as plain text; the file API
+ * expects it as a Bearer token. */
+async function inclassToken(cookie: string): Promise<string> {
+  const res = await fetch(`${BASE}/_common/xhr/token.asp`, {
+    headers: { "User-Agent": UA, Cookie: cookie, Referer: `${BASE}/boardQnAS/write/` },
+  });
+  if (!res.ok) throw new InclassError("inclass 업로드 토큰을 받지 못했습니다.");
+  return (await res.text()).trim().replace(/^["']|["']$/g, "");
+}
+
+/** Upload one image to inclass on the shared account, then move it from temp to
+ * the board's permanent folder — mirroring the site's uploader.saveFiles(). The
+ * token is short-lived, so we mint a fresh one for each call. Returns the form
+ * references + a public URL for preview. */
+export async function inclassUploadImage(
+  cookie: string,
+  image: { buffer: Buffer; filename: string; contentType: string }
+): Promise<InclassAttachment> {
+  // 1) Upload into temp/.
+  const form = new FormData();
+  form.append("file", new Blob([new Uint8Array(image.buffer)], { type: image.contentType }), image.filename);
+  form.append("folderName", "temp");
+  form.append("fileName", encodeURIComponent(image.filename));
+
+  const up = await fetch(`${API}/sls/v1/file/upload`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${await inclassToken(cookie)}`, Origin: BASE, Referer: `${BASE}/` },
+    body: form,
+  });
+  const upData = (await up.json().catch(() => null)) as { Key?: string; key?: string } | null;
+  const tempKey = upData?.Key || upData?.key;
+  if (!tempKey) throw new InclassError("이미지 업로드에 실패했습니다.");
+
+  // 2) Move temp → permanent (board/qna/…).
+  const save = await fetch(`${API}/sls/v1/file`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${await inclassToken(cookie)}`,
+      "Content-Type": "application/json",
+      Origin: BASE,
+      Referer: `${BASE}/`,
+    },
+    body: JSON.stringify({ folderName: FILE_FOLDER, key: tempKey }),
+  });
+  const saveData = (await save.json().catch(() => null)) as { key?: string; Key?: string } | null;
+  const permKey = saveData?.key || saveData?.Key;
+  if (!permKey) throw new InclassError("이미지 저장에 실패했습니다.");
+
+  return { fileUpNM: permKey.split("/").pop() || permKey, fileKey: permKey, url: `${S3_BUCKET}${permKey}` };
 }
 
 /** Submit a new question to the board. Success is a redirect back to the list;
@@ -89,6 +157,12 @@ export async function inclassPostQuestion(params: PostQuestionParams): Promise<v
   });
   // The 공개여부 checkbox only submits (isOpen=N) when the student hides the post.
   if (params.secret) fp.set("isOpen", "N");
+  // Each attachment adds a fileUpNM + fileKey pair, exactly like the site's
+  // per-file hidden inputs after saveFiles().
+  for (const a of params.attachments ?? []) {
+    fp.append("fileUpNM", a.fileUpNM);
+    fp.append("fileKey", a.fileKey);
+  }
 
   let res: Response;
   try {

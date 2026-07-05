@@ -7,10 +7,17 @@ import { buildInclassContentHtml, inclassPostQuestion, inclassFindArticleId, inc
 
 const LAB = getResearchLab("parkjongmin");
 
+const attachmentSchema = z.object({
+  fileUpNM: z.string().min(1),
+  fileKey: z.string().min(1),
+  url: z.string().min(1),
+});
+
 const createSchema = z.object({
   subject: z.string().trim().min(1, "제목을 입력해주세요.").max(200), // question title
   body: z.string().trim().min(1, "내용을 입력해주세요."),
   secret: z.boolean().optional(),
+  attachments: z.array(attachmentSchema).max(3).optional(),
 });
 
 export async function GET() {
@@ -50,10 +57,10 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "잘못된 요청입니다." }, { status: 400 });
   }
-  const { subject, body, secret } = parsed.data;
+  const { subject, body, secret, attachments } = parsed.data;
 
   try {
-    await inclassPostQuestion({ title: subject, contentHtml: buildInclassContentHtml(body), secret });
+    await inclassPostQuestion({ title: subject, contentHtml: buildInclassContentHtml(body), secret, attachments });
   } catch (err) {
     const message = err instanceof InclassError ? err.message : "질문 등록에 실패했습니다.";
     return NextResponse.json({ error: message }, { status: 502 });
@@ -66,6 +73,7 @@ export async function POST(req: Request) {
       ownerId: user.id,
       subject,
       body,
+      imagePaths: (attachments ?? []).map((a) => a.url),
       articleId,
       articleUrl: articleId ? inclassViewUrl(articleId) : null,
     },
