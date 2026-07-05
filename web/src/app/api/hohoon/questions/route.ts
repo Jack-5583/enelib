@@ -22,6 +22,9 @@ export async function GET() {
       title: q.subject, // stored article title
       body: q.body,
       imagePaths: q.imagePaths.map((p) => `https://www.hohoonmath.com${p}`),
+      articleUrl: q.articleUrl,
+      answerText: q.answerText,
+      answeredAt: q.answeredAt,
       commentCount: q.commentCount,
       hasUnseenReply: q.hasUnseenReply,
       done: q.done,

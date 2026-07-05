@@ -191,6 +191,64 @@ export function buildArticleHtml(text: string, imagePaths: string[]): string {
   return escaped + imgs;
 }
 
+export function hohoonViewUrl(articleId: string): string {
+  return `${BASE}/weekly/${BBSID}.html?bbsid=${BBSID}&gbn=view&ix=${articleId}`;
+}
+
+/** Posting doesn't return the new article id, so right after a successful post
+ * we look it up from the list: find the row carrying our title, else fall back
+ * to the newest (largest) id on the page — which is our just-posted article. */
+export async function hohoonFindArticleId(cookie: string, title: string): Promise<string | null> {
+  const res = await fetch(`${BASE}/weekly/${BBSID}.html?bbsid=${BBSID}&gbn=list&ps=10&gp=1`, {
+    headers: { "User-Agent": UA, Cookie: cookie },
+  });
+  if (!res.ok) return null;
+  const html = await res.text();
+
+  const escaped = title.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const pos = html.indexOf(escaped) >= 0 ? html.indexOf(escaped) : html.indexOf(title);
+  if (pos >= 0) {
+    // The row's view link (…ix=NNNN) precedes the subject text.
+    const before = html.slice(0, pos);
+    const ms = [...before.matchAll(/ix=(\d+)/g)];
+    if (ms.length) return ms[ms.length - 1][1];
+  }
+  const all = [...html.matchAll(/[?&]ix=(\d+)/g)].map((m) => Number(m[1])).filter((n) => n > 0);
+  return all.length ? String(Math.max(...all)) : null;
+}
+
+/** Scrape the teacher's answer ("선생님 답변") from a question's view page, if one
+ * has been posted yet. Returns null when there's no answer or on any failure. */
+export async function hohoonFetchAnswer(cookie: string, articleId: string): Promise<{ text: string; date: string | null } | null> {
+  try {
+    const res = await fetch(hohoonViewUrl(articleId), { headers: { "User-Agent": UA, Cookie: cookie } });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const marker = html.indexOf("선생님 답변");
+    if (marker < 0) return null;
+    const after = html.slice(marker, marker + 8000);
+    const dateM = /\(\s*([\d]{4}-[\d]{2}-[\d]{2}[^)]*)\)/.exec(after);
+    const brIdx = after.indexOf("<br><br>");
+    let answerHtml = brIdx >= 0 ? after.slice(brIdx + 8) : after;
+    const endIdx = answerHtml.indexOf("</div>");
+    if (endIdx >= 0) answerHtml = answerHtml.slice(0, endIdx);
+    const text = answerHtml
+      .replace(/<\s*br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    if (!text) return null;
+    return { text, date: dateM ? dateM[1].trim() : null };
+  } catch {
+    return null;
+  }
+}
+
 /** A fresh imgcode (temp image folder id) for one composing session. */
 export function newImgcode(): string {
   return `${Date.now()}${Math.floor(Math.random() * 1000)}`;

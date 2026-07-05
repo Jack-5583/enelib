@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-import { hohoonPostArticle, buildArticleHtml, HohoonError } from "@/lib/hohoon";
+import { hohoonPostArticle, buildArticleHtml, hohoonFindArticleId, hohoonViewUrl, HohoonError } from "@/lib/hohoon";
 
 const submitSchema = z.object({
   subject: z.string().min(1).max(100),
@@ -41,8 +41,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
+  // Find the just-posted article's id (for later answer scraping) while the
+  // session is still alive. Best-effort — a post shouldn't fail over this.
+  let articleId: string | null = null;
+  try {
+    articleId = await hohoonFindArticleId(draft.phpsessid, subject);
+  } catch {
+    articleId = null;
+  }
+
   const question = await prisma.hohoonQuestion.create({
-    data: { ownerId: user.id, subject, body, imagePaths: draft.imagePaths },
+    data: {
+      ownerId: user.id,
+      subject,
+      body,
+      imagePaths: draft.imagePaths,
+      articleId,
+      articleUrl: articleId ? hohoonViewUrl(articleId) : null,
+    },
   });
   await prisma.hohoonDraft.delete({ where: { id: draft.id } }).catch(() => {});
 

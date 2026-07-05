@@ -28,6 +28,8 @@ interface QuestionItem {
   imagePaths?: string[];
   postStatus?: string;
   cafeArticleUrl?: string | null;
+  articleUrl?: string | null;
+  answerText?: string | null;
   commentCount: number;
   hasUnseenReply: boolean;
   done: boolean;
@@ -633,6 +635,32 @@ function HohoonComposeForm({
 
 function HohoonDetailSheet({ item, onClose }: { item: QuestionItem; onClose: () => void }) {
   const [deleting, setDeleting] = useState(false);
+  const [answer, setAnswer] = useState<string | null>(item.answerText ?? null);
+  const [loadingAnswer, setLoadingAnswer] = useState(false);
+
+  function loadAnswer() {
+    setLoadingAnswer(true);
+    fetch(`/api/hohoon/questions/${item.id}/refresh`, { method: "POST" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (typeof d.answerText === "string") setAnswer(d.answerText);
+      })
+      .finally(() => setLoadingAnswer(false));
+  }
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/hohoon/questions/${item.id}/refresh`, { method: "POST" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (active && typeof d.answerText === "string") setAnswer(d.answerText);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function del() {
     if (!window.confirm("이 질문을 삭제할까요? (호형훈제수학연구소에 이미 올라간 글은 앱에서 삭제해도 사이트에는 그대로 남아있습니다.)")) return;
@@ -658,9 +686,28 @@ function HohoonDetailSheet({ item, onClose }: { item: QuestionItem; onClose: () 
           ))}
         </div>
       )}
-      <p className="m-0 mb-6 text-[13px] leading-5 text-[#161616]/50">
-        선생님 답변은 호형훈제수학연구소 사이트에서 확인해 주세요. 확인 후 &lsquo;완료&rsquo;로 표시하면 목록에서 정리돼요.
-      </p>
+
+      <div className="mb-6 border-t border-[#16161614] pt-4">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="m-0 text-[13px] leading-5 font-semibold text-[#161616]">선생님 답변</p>
+          <button onClick={loadAnswer} disabled={loadingAnswer} className="border-none bg-none p-0 text-[12px] text-[#161616]/50 underline underline-offset-[3px] disabled:opacity-50">
+            새로고침
+          </button>
+        </div>
+        {answer ? (
+          <p className="m-0 text-[14px] leading-6 whitespace-pre-wrap text-[#393939]">{answer}</p>
+        ) : loadingAnswer ? (
+          <p className="m-0 py-4 text-center text-[13px] text-[#161616]/40">답변 확인 중…</p>
+        ) : (
+          <p className="m-0 py-4 text-center text-[13px] text-[#161616]/40">아직 선생님 답변이 없습니다.</p>
+        )}
+        {item.articleUrl && (
+          <a href={item.articleUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[12px] text-[#161616]/40 underline underline-offset-[3px]">
+            사이트에서 직접 확인하기 ↗
+          </a>
+        )}
+      </div>
+
       <button
         onClick={del}
         disabled={deleting}

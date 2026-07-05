@@ -393,6 +393,8 @@ model HohoonQuestion {
   imagePaths     String[] @default([])
   articleId      String?
   articleUrl     String?
+  answerText     String?  @db.Text
+  answeredAt     DateTime?
   commentCount   Int      @default(0)
   hasUnseenReply Boolean  @default(false)
   done           Boolean  @default(false)
