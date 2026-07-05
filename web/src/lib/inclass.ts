@@ -155,8 +155,9 @@ export async function inclassPostQuestion(params: PostQuestionParams): Promise<v
     contents: params.contentHtml,
     isTitleSecret: "N",
   });
-  // The 공개여부 checkbox only submits (isOpen=N) when the student hides the post.
-  if (params.secret) fp.set("isOpen", "N");
+  // Questions are always posted 비공개 (작성자만 열람) — the "이 질문은 공개하지
+  // 않겠습니다" checkbox is effectively always on. It submits as isOpen=N.
+  fp.set("isOpen", "N");
   // Each attachment adds a fileUpNM + fileKey pair, exactly like the site's
   // per-file hidden inputs after saveFiles().
   for (const a of params.attachments ?? []) {

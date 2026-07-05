@@ -853,6 +853,8 @@ function InclassComposeForm({
         </label>
       )}
 
+      <p className="m-0 mb-4 text-[12px] leading-5 text-[#161616]/45">🔒 이 질문은 비공개(작성자만 열람)로 등록됩니다.</p>
+
       {error && <p className="m-0 mb-4 text-[13px] text-[#e0362f]">{error}</p>}
 
       <div className="flex gap-3">
