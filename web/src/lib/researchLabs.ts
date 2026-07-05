@@ -64,6 +64,13 @@ export const RESEARCH_LABS: ResearchLab[] = [
       { id: "concept", name: "개념", menuid: "14" },
     ],
   },
+  {
+    id: "test",
+    name: "테스트카페",
+    clubid: "31609507",
+    homeUrl: "https://cafe.naver.com/enelabh3s08",
+    boards: [{ id: "qna", name: "질문 게시판", menuid: "17" }],
+  },
 ];
 
 export function getResearchLab(id: string): ResearchLab | null {
