@@ -52,9 +52,16 @@ model User {
   todos        Todo[]
   exams        Exam[]
   ddays        Dday[]
+  questions    Question[]
   camSessions  CamSession[]
   timelineEntries TimelineEntry[]
   studentAuthCodes StudentAuthCode[]
+
+  // Naver Login (used only for TA 질문하기 → Naver Cafe posting)
+  naverAccessToken     String?
+  naverRefreshToken    String?
+  naverTokenExpiresAt  DateTime?
+  naverNickname        String?
 
   // parent <-> student links
   parentLinks  ParentStudentLink[] @relation("ParentLinks")
@@ -317,4 +324,26 @@ model TimelineMemo {
   dataUrl         String   @db.Text
   penColor        String   @default("#e0362f")
   updatedAt       DateTime @updatedAt
+}
+
+/// A "TA 질문하기" question, mirrored out to a linked Naver Cafe as a real post.
+model Question {
+  id             String   @id @default(cuid())
+  ownerId        String
+  owner          User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  labId          String
+  subject        String
+  title          String
+  content        String   @db.Text
+  photoUrls      String[] @default([])
+  postStatus     String   @default("pending") // pending | posted | failed
+  postError      String?
+  cafeClubUrl    String?
+  cafeArticleId  String?
+  cafeArticleUrl String?
+  commentCount   Int      @default(0)
+  hasUnseenReply Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([ownerId])
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getDday, formatDdayTargetLabel } from "@/lib/dday";
@@ -11,6 +12,7 @@ const STUDENT_NAV = [
   { href: "/materials", pcLabel: "학습자료", mobileLabel: "자료" },
   { href: "/camstudy", pcLabel: "캠스터디", mobileLabel: "캠" },
   { href: "/grades", pcLabel: "성적", mobileLabel: "성적" },
+  { href: "/questions", pcLabel: "TA 질문하기", mobileLabel: "질문" },
 ];
 
 const PARENT_NAV = [
@@ -28,6 +30,15 @@ export function AppShell({ user, children }: { user: SessionUserDTO; children: R
   const mobileNav = isParent ? [...navBase, settingsItem] : navBase;
 
   const { dday, target } = getDday();
+
+  const [hasUnseenQuestionReply, setHasUnseenQuestionReply] = useState(false);
+  useEffect(() => {
+    if (isParent) return;
+    fetch("/api/questions/unseen-count")
+      .then((r) => r.json())
+      .then((d) => setHasUnseenQuestionReply((d.count ?? 0) > 0))
+      .catch(() => {});
+  }, [isParent]);
 
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden bg-white">
@@ -65,11 +76,12 @@ export function AppShell({ user, children }: { user: SessionUserDTO; children: R
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`mb-0.5 block w-full py-0.5 text-left text-[32px] leading-[48px] font-extralight tracking-[-0.01em] ${
+                  className={`mb-0.5 flex w-full items-center gap-2 py-0.5 text-left text-[32px] leading-[48px] font-extralight tracking-[-0.01em] ${
                     isActive ? "text-[#161616] underline decoration-1 underline-offset-[3px]" : "text-[#161616]/30 no-underline"
                   }`}
                 >
                   {item.pcLabel}
+                  {item.href === "/questions" && hasUnseenQuestionReply && <span className="h-2 w-2 flex-none rounded-full bg-[#e0362f]" />}
                 </Link>
               );
             })}
@@ -92,12 +104,15 @@ export function AppShell({ user, children }: { user: SessionUserDTO; children: R
             <Link
               key={item.href}
               href={item.href}
-              className="flex flex-1 flex-col items-center justify-center gap-1.5 pt-2.5"
+              className="relative flex flex-1 flex-col items-center justify-center gap-1.5 pt-2.5"
             >
               <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-[#161616]" : "bg-transparent"}`} />
               <span className={`text-[11px] leading-[14px] ${active ? "font-semibold text-[#161616]" : "font-normal text-[#161616]/35"}`}>
                 {item.mobileLabel}
               </span>
+              {item.href === "/questions" && hasUnseenQuestionReply && (
+                <span className="absolute top-1 right-[calc(50%-20px)] h-2 w-2 rounded-full bg-[#e0362f]" />
+              )}
             </Link>
           );
         })}
