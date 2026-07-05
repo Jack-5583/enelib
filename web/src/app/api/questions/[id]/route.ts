@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { getResearchLab, getResearchLabBoard } from "@/lib/researchLabs";
+import { getCommentsEmbedUrl } from "@/lib/naver";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,6 +28,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     postStatus: question.postStatus,
     postError: question.postError,
     cafeArticleUrl: question.cafeArticleUrl,
+    commentsEmbedUrl: question.cafeArticleUrl ? getCommentsEmbedUrl(question.cafeArticleUrl) : null,
     commentCount: question.commentCount,
     createdAt: question.createdAt,
   });

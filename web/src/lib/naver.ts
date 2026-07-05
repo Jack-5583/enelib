@@ -136,6 +136,12 @@ interface PostArticleResult {
   articleUrl: string;
 }
 
+/** The mobile "comments only" view of a public article — light enough to embed
+ * in an iframe and to scrape for a comment count, without needing a Naver login. */
+export function getCommentsEmbedUrl(articleUrl: string): string {
+  return articleUrl.replace("cafe.naver.com", "m.cafe.naver.com").replace(/\/?$/, "/comments");
+}
+
 export async function postNaverCafeArticle(params: PostArticleParams): Promise<PostArticleResult> {
   const form = new FormData();
   form.append("subject", new Blob([new Uint8Array(iconv.encode(params.subject, "cp949"))]));

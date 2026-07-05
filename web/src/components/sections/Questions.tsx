@@ -43,6 +43,7 @@ interface QuestionDetail {
   postStatus: string;
   postError: string | null;
   cafeArticleUrl: string | null;
+  commentsEmbedUrl: string | null;
   commentCount: number;
 }
 
@@ -453,12 +454,19 @@ function QuestionDetailSheet({ id, onClose }: { id: string; onClose: () => void 
 
       {detail.postStatus === "posted" && (
         <div className="mb-6 border-t border-[#16161614] pt-4">
-          <p className="m-0 mb-2 text-[13px] leading-5 text-[#161616]/50">
+          <p className="m-0 mb-3 text-[13px] leading-5 text-[#161616]/50">
             댓글 {detail.commentCount}개 · 새 댓글이 달리면 이 앱에서 알려드려요.
           </p>
+          {detail.commentsEmbedUrl && (
+            <iframe
+              src={detail.commentsEmbedUrl}
+              title="카페 댓글"
+              className="mb-2 h-[360px] w-full border border-[#16161614]"
+            />
+          )}
           {detail.cafeArticleUrl && (
-            <a href={detail.cafeArticleUrl} target="_blank" rel="noreferrer" className="text-[13px] text-[#002a9e] underline underline-offset-[3px]">
-              실제 카페 게시글에서 답변 확인하기 ↗
+            <a href={detail.cafeArticleUrl} target="_blank" rel="noreferrer" className="text-[12px] text-[#161616]/40 underline underline-offset-[3px]">
+              댓글이 안 보이면 여기를 눌러 카페에서 직접 확인하세요 ↗
             </a>
           )}
         </div>
