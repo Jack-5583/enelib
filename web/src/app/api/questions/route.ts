@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-import { getResearchLab } from "@/lib/researchLabs";
+import { getResearchLab, getResearchLabBoard } from "@/lib/researchLabs";
 import { joinNaverCafe, postNaverCafeArticle, NaverCafeError } from "@/lib/naver";
 
 export async function GET() {
@@ -18,6 +18,8 @@ export async function GET() {
       id: q.id,
       labId: q.labId,
       labName: getResearchLab(q.labId)?.name || q.labId,
+      boardId: q.boardId,
+      boardName: getResearchLabBoard(q.labId, q.boardId)?.board.name || q.boardId,
       subject: q.subject,
       title: q.title,
       postStatus: q.postStatus,
@@ -38,6 +40,7 @@ function dataUrlToBuffer(dataUrl: string): { buffer: Buffer; contentType: string
 
 const createSchema = z.object({
   labId: z.string().min(1),
+  boardId: z.string().min(1),
   subject: z.string().min(1),
   title: z.string().min(1).max(100),
   content: z.string().min(1).max(5000),
@@ -53,11 +56,9 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
   const data = parsed.data;
 
-  const lab = getResearchLab(data.labId);
-  if (!lab) return NextResponse.json({ error: "존재하지 않는 연구소입니다." }, { status: 400 });
-  if (!lab.clubid || !lab.menuid) {
-    return NextResponse.json({ error: "이 연구소는 아직 카페 연동 설정이 완료되지 않았습니다." }, { status: 503 });
-  }
+  const found = getResearchLabBoard(data.labId, data.boardId);
+  if (!found) return NextResponse.json({ error: "존재하지 않는 연구소 또는 게시판입니다." }, { status: 400 });
+  const { lab, board } = found;
   if (!user.naverAccessToken) {
     return NextResponse.json({ error: "네이버 계정을 먼저 연결해 주세요.", needsNaverConnect: true }, { status: 409 });
   }
@@ -75,6 +76,7 @@ export async function POST(req: Request) {
     data: {
       ownerId: user.id,
       labId: lab.id,
+      boardId: board.id,
       subject: data.subject,
       title: data.title,
       content: data.content,
@@ -88,7 +90,7 @@ export async function POST(req: Request) {
     const result = await postNaverCafeArticle({
       accessToken: user.naverAccessToken,
       clubid: lab.clubid,
-      menuid: lab.menuid,
+      menuid: board.menuid,
       subject: `[TA질문] ${data.title}`,
       content: data.content.replace(/\n/g, "<br>"),
       images,

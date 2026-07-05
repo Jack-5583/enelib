@@ -6,15 +6,22 @@ import { Badge } from "@/components/ui/Badge";
 import { Sheet } from "@/components/ui/Sheet";
 import { SUBJECTS } from "@/lib/subjects";
 
+interface BoardOption {
+  id: string;
+  name: string;
+}
+
 interface LabOption {
   id: string;
   name: string;
+  boards: BoardOption[];
 }
 
 interface QuestionItem {
   id: string;
   labId: string;
   labName: string;
+  boardName: string;
   subject: string;
   title: string;
   postStatus: string;
@@ -28,6 +35,7 @@ interface QuestionItem {
 interface QuestionDetail {
   id: string;
   labName: string;
+  boardName: string;
   subject: string;
   title: string;
   content: string;
@@ -104,6 +112,7 @@ export function Questions() {
           <div className="min-w-0 flex-1">
             <div className="mb-1.5 flex items-center gap-2">
               <Badge>{q.labName}</Badge>
+              <span className="text-[12px] text-[#161616]/40">{q.boardName}</span>
               {q.postStatus === "failed" && <span className="text-[12px] text-[#e0362f]">등록 실패</span>}
               {q.hasUnseenReply && <span className="h-2 w-2 flex-none rounded-full bg-[#e0362f]" />}
             </div>
@@ -154,6 +163,7 @@ function AddQuestionSheet({
 }) {
   const [labs, setLabs] = useState<LabOption[]>([]);
   const [labId, setLabId] = useState<string | null>(null);
+  const [boardId, setBoardId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/questions/labs")
@@ -161,7 +171,15 @@ function AddQuestionSheet({
       .then(setLabs);
   }, []);
 
-  if (!labId) {
+  const lab = labs.find((l) => l.id === labId) || null;
+
+  function pickLab(l: LabOption) {
+    setLabId(l.id);
+    // Skip the board picker entirely when there's only one board to choose.
+    setBoardId(l.boards.length === 1 ? l.boards[0].id : null);
+  }
+
+  if (!lab) {
     return (
       <Sheet open onClose={onClose} maxWidth={480}>
         <h2 className="m-0 mb-1 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">질문할 연구소 선택하기</h2>
@@ -170,7 +188,7 @@ function AddQuestionSheet({
           {labs.map((l) => (
             <button
               key={l.id}
-              onClick={() => setLabId(l.id)}
+              onClick={() => pickLab(l)}
               className="flex items-center justify-between border border-[#16161614] px-4 py-3.5 text-left"
             >
               <span className="text-[15px] text-[#161616] lg:text-[16px]">{l.name}</span>
@@ -188,11 +206,52 @@ function AddQuestionSheet({
     );
   }
 
+  if (!boardId) {
+    return (
+      <Sheet open onClose={onClose} maxWidth={480}>
+        <h2 className="m-0 mb-1 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">게시판 선택하기</h2>
+        <p className="m-0 mb-6 text-[14px] leading-6 text-[#161616]/50">
+          <span className="font-semibold text-[#161616]">{lab.name}</span>의 어느 게시판에 올릴지 선택하세요.
+        </p>
+        <div className="scrollbar-hide flex max-h-[50vh] flex-col gap-2.5 overflow-y-auto">
+          {lab.boards.map((b) => (
+            <button
+              key={b.id}
+              onClick={() => setBoardId(b.id)}
+              className="flex items-center justify-between border border-[#16161614] px-4 py-3.5 text-left"
+            >
+              <span className="text-[15px] text-[#161616] lg:text-[16px]">{b.name}</span>
+              <span className="text-[16px] text-[#161616]/30">→</span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-8">
+          <button onClick={() => setLabId(null)} className="w-full rounded-[2px] border border-[#161616] bg-white py-3.5 text-[15px] font-medium text-[#161616]">
+            뒤로
+          </button>
+        </div>
+      </Sheet>
+    );
+  }
+
+  const singleBoardLab = lab.boards.length === 1;
+  function backFromForm() {
+    if (singleBoardLab) {
+      // Board picker was skipped for a single-board lab — go straight back to lab selection.
+      setLabId(null);
+      setBoardId(null);
+    } else {
+      setBoardId(null);
+    }
+  }
+
   return (
     <QuestionForm
-      labId={labId}
-      labName={labs.find((l) => l.id === labId)?.name || labId}
-      onBack={() => setLabId(null)}
+      labId={lab.id}
+      labName={lab.name}
+      boardId={boardId}
+      boardName={lab.boards.find((b) => b.id === boardId)?.name || boardId}
+      onBack={backFromForm}
       onClose={onClose}
       onSaved={onSaved}
       onNeedsNaver={onNeedsNaver}
@@ -203,6 +262,8 @@ function AddQuestionSheet({
 function QuestionForm({
   labId,
   labName,
+  boardId,
+  boardName,
   onBack,
   onClose,
   onSaved,
@@ -210,6 +271,8 @@ function QuestionForm({
 }: {
   labId: string;
   labName: string;
+  boardId: string;
+  boardName: string;
   onBack: () => void;
   onClose: () => void;
   onSaved: () => void;
@@ -251,6 +314,7 @@ function QuestionForm({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         labId,
+        boardId,
         subject,
         title: title.trim(),
         content: content.trim(),
@@ -271,7 +335,7 @@ function QuestionForm({
     <Sheet open onClose={onClose} maxWidth={560}>
       <h2 className="m-0 mb-1 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">질문 작성</h2>
       <p className="m-0 mb-6 text-[14px] leading-6 text-[#161616]/50 lg:text-[16px]">
-        <span className="font-semibold text-[#161616]">{labName}</span>에 질문을 올립니다.
+        <span className="font-semibold text-[#161616]">{labName}</span> · {boardName}에 질문을 올립니다.
       </p>
 
       <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">과목</p>
@@ -365,6 +429,7 @@ function QuestionDetailSheet({ id, onClose }: { id: string; onClose: () => void 
     <Sheet open onClose={onClose} maxWidth={620}>
       <div className="mb-4 flex items-center gap-2">
         <Badge>{detail.labName}</Badge>
+        <span className="text-[12px] text-[#161616]/40">{detail.boardName}</span>
         <Badge>{detail.subject}</Badge>
       </div>
       <h2 className="m-0 mb-4 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">{detail.title}</h2>

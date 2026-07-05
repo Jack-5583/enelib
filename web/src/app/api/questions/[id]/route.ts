@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
-import { getResearchLab } from "@/lib/researchLabs";
+import { getResearchLab, getResearchLabBoard } from "@/lib/researchLabs";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,6 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     id: question.id,
     labId: question.labId,
     labName: getResearchLab(question.labId)?.name || question.labId,
+    boardName: getResearchLabBoard(question.labId, question.boardId)?.board.name || question.boardId,
     subject: question.subject,
     title: question.title,
     content: question.content,

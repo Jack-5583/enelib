@@ -332,6 +332,7 @@ model Question {
   ownerId        String
   owner          User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   labId          String
+  boardId        String
   subject        String
   title          String
   content        String   @db.Text
