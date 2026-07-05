@@ -131,7 +131,7 @@ export async function POST(req: Request) {
       accessToken,
       clubid: lab.clubid,
       menuid: board.menuid,
-      subject: `[TA질문] ${data.title}`,
+      subject: data.title,
       content: data.content.replace(/\n/g, "<br>"),
       images,
       openyn: true,
