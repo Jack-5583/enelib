@@ -58,8 +58,6 @@ model User {
   hohoonQuestions HohoonQuestion[]
   sdijAccount     SdijAccount?
   inclassQuestions InclassQuestion[]
-  omrSheets   OmrSheet[]
-  omrResults  OmrResult[]
   camSessions  CamSession[]
   timelineEntries TimelineEntry[]
   studentAuthCodes StudentAuthCode[]
@@ -443,39 +441,4 @@ model InclassQuestion {
   @@index([ownerId])
 }
 
-/// An OMR (수능 답안지) answer key + layout the student builds once per test, then
-/// fills in and grades. `config` is an OmrConfig (array of {no,type,answer,points}).
-model OmrSheet {
-  id          String   @id @default(cuid())
-  ownerId     String
-  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  title       String
-  subject     String
-  examPaperId String?
-  config      Json
-  maxScore    Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 
-  results OmrResult[]
-
-  @@index([ownerId])
-}
-
-/// One grading run of an OmrSheet. `answers` is a {questionNo: markedValue} map.
-model OmrResult {
-  id           String   @id @default(cuid())
-  ownerId      String
-  owner        User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  sheetId      String
-  sheet        OmrSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
-  answers      Json
-  raw          Int
-  total        Int
-  correctCount Int
-  wrongNos     String[] @default([])
-  createdAt    DateTime @default(now())
-
-  @@index([ownerId])
-  @@index([sheetId])
-}
