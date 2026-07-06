@@ -9,7 +9,7 @@ const questionSchema = z.object({
   type: z.enum(["choice", "short"]),
   answer: z.string().max(8),
   points: z.number().int().min(0).max(100),
-  section: z.enum(["공통", "선택"]).optional(),
+  section: z.string().max(20).optional(),
 });
 
 const createSchema = z.object({
