@@ -42,7 +42,7 @@ const INCLASS_COOKIES: Record<string, () => string> = {
     process.env.INCLASS_COOKIE_TIGERCHAN ||
     [
       "siteVisited%5Ftigerchan=Y",
-      "www_auth_token=e60e4b826ae642cab042a3775d0ae362e60e4b826ae642cab042a3775d0ae362",
+      "www_auth_token=dc67ba5d478b4b16842caf6ff8a54b45dc67ba5d478b4b16842caf6ff8a54b45",
       "inclass=paramKey=tigerchan",
       "ASPSESSIONIDSSCCRBDB=LOACOAJCAHINBHGBEAJBIFDB",
     ].join("; "),
