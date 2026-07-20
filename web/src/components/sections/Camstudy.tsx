@@ -194,30 +194,48 @@ export function Camstudy() {
     ctx.fillText(fmtTime(secondsRef.current), canvas.width / 2, canvas.height - barH / 2);
   }
 
-  async function enterPip() {
-    const video = videoRef.current;
-    if (typeof document === "undefined" || !document.pictureInPictureEnabled) return;
-    if (!video || !video.videoWidth || document.pictureInPictureElement) return;
-    const canvas = pipCanvasRef.current ?? document.createElement("canvas");
-    pipCanvasRef.current = canvas;
-    canvas.width = 480;
-    canvas.height = 360;
-    drawPipFrame();
-    if (pipDrawRef.current) clearInterval(pipDrawRef.current);
-    // 500ms when visible; browsers clamp to ~1s while hidden — fine for a clock.
-    pipDrawRef.current = setInterval(drawPipFrame, 500);
+  // Set up (once per session) the canvas→hidden-<video> pipeline and start it
+  // playing, so the PiP button click can call requestPictureInPicture()
+  // immediately — awaiting play() first would consume the click's user
+  // activation and the browser would reject PiP.
+  function ensurePipStream() {
     const pv = pipVideoRef.current;
     if (!pv) return;
-    if (!pv.srcObject) pv.srcObject = canvas.captureStream(10);
-    await pv.play().catch(() => {});
+    let canvas = pipCanvasRef.current;
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.width = 480;
+      canvas.height = 360;
+      pipCanvasRef.current = canvas;
+    }
+    drawPipFrame();
+    // 500ms when visible; browsers clamp to ~1s while hidden — fine for a clock.
+    if (!pipDrawRef.current) pipDrawRef.current = setInterval(drawPipFrame, 500);
+    if (!pv.srcObject) {
+      pv.srcObject = canvas.captureStream(10);
+      pv.play().catch(() => {});
+    }
+  }
+
+  async function enterPip() {
+    const pv = pipVideoRef.current;
+    if (typeof document === "undefined" || !document.pictureInPictureEnabled || !pv) return;
+    if (document.pictureInPictureElement) return;
+    ensurePipStream();
     try {
+      // Fast path: stream already playing (set up when the session started) —
+      // this is the first await, so the click's user activation is intact.
       await pv.requestPictureInPicture();
       setPipActive(true);
     } catch {
-      // Blocked (e.g. no user gesture) — stop the draw loop we started.
-      if (pipDrawRef.current) {
-        clearInterval(pipDrawRef.current);
-        pipDrawRef.current = null;
+      // Stream may not have been playing yet; start it and retry once.
+      try {
+        await pv.play();
+        await pv.requestPictureInPicture();
+        setPipActive(true);
+      } catch {
+        setPipActive(false);
+        setCameraError("이 브라우저에서는 PiP를 쓸 수 없어요. (Chrome/Edge/Safari 최신 버전 권장)");
       }
     }
   }
@@ -228,30 +246,38 @@ export function Camstudy() {
     } catch {
       /* ignore */
     }
+    setPipActive(false);
+  }
+
+  // Keep the PiP pipeline ready while a session runs; tear it down when it ends.
+  useEffect(() => {
+    if (running) {
+      ensurePipStream();
+      return;
+    }
     if (pipDrawRef.current) {
       clearInterval(pipDrawRef.current);
       pipDrawRef.current = null;
     }
-    setPipActive(false);
-  }
+    const pv = pipVideoRef.current;
+    if (pv?.srcObject) {
+      (pv.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
+      pv.srcObject = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running]);
 
   // Reflect the browser's own PiP close button back into our state.
   useEffect(() => {
     const pv = pipVideoRef.current;
     if (!pv) return;
-    const onLeave = () => {
-      if (pipDrawRef.current) {
-        clearInterval(pipDrawRef.current);
-        pipDrawRef.current = null;
-      }
-      setPipActive(false);
-    };
+    const onLeave = () => setPipActive(false);
     pv.addEventListener("leavepictureinpicture", onLeave);
     return () => pv.removeEventListener("leavepictureinpicture", onLeave);
   }, []);
 
   // Best-effort: pop PiP when the page is hidden during a session (some
-  // browsers require a prior click — the PiP button covers those).
+  // browsers block auto-PiP without a prior click — the PiP button covers that).
   useEffect(() => {
     const onVis = () => {
       if (document.hidden) {
@@ -381,8 +407,9 @@ export function Camstudy() {
                 {pipActive ? "PiP 끄기" : "PiP"}
               </button>
             )}
-            {/* Hidden sink for the composited camera+timer PiP stream. */}
-            <video ref={pipVideoRef} muted playsInline className="hidden" />
+            {/* Off-screen sink for the composited camera+timer PiP stream.
+                Not display:none — some browsers refuse PiP on hidden video. */}
+            <video ref={pipVideoRef} muted playsInline autoPlay className="pointer-events-none absolute h-px w-px opacity-0" />
             {previewOn && !running && (
               <div className="absolute top-3.5 left-3.5 rounded-[2px] bg-[#161616]/80 px-2.5 py-1 text-[13px] font-medium text-white">미리보기</div>
             )}
