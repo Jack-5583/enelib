@@ -42,7 +42,7 @@ const INCLASS_COOKIES: Record<string, () => string> = {
     process.env.INCLASS_COOKIE_TIGERCHAN ||
     [
       "siteVisited%5Ftigerchan=Y",
-      "www_auth_token=653b1b9bcea24fb990b522a097e21fd9653b1b9bcea24fb990b522a097e21fd9",
+      "www_auth_token=e60e4b826ae642cab042a3775d0ae362e60e4b826ae642cab042a3775d0ae362",
       "inclass=paramKey=tigerchan",
       "ASPSESSIONIDSSCCRBDB=LOACOAJCAHINBHGBEAJBIFDB",
     ].join("; "),
@@ -235,7 +235,15 @@ export async function inclassPostQuestion(ctx: InclassCtx, params: PostQuestionP
     throw new InclassError(`${ctx.labName}에 연결하지 못했습니다.`);
   }
 
-  if (res.status >= 300 && res.status < 400) return;
+  // A redirect is only success when it goes back to the board; a redirect to the
+  // login/mypage means our shared session expired (so we must NOT report success).
+  if (res.status >= 300 && res.status < 400) {
+    const loc = res.headers.get("location") || "";
+    if (/member|login|mypage/i.test(loc)) {
+      throw new InclassError("inclass 세션이 만료되었습니다. 관리자 인증 정보를 갱신해 주세요.", loc);
+    }
+    return;
+  }
 
   const text = await res.text().catch(() => "");
   const alert = extractAlert(text);
@@ -246,11 +254,13 @@ export async function inclassPostQuestion(ctx: InclassCtx, params: PostQuestionP
     if (!isFailure) return;
     throw new InclassError(alert, text);
   }
-  if (new RegExp(`location\\.(href|replace)|/${ctx.boardPath}/list`).test(text)) return;
-  if (/member\/login|로그인/.test(text)) {
+  if (/member\/login|로그인|mypage/.test(text)) {
     throw new InclassError("inclass 세션이 만료되었습니다. 관리자 인증 정보를 갱신해 주세요.", text);
   }
-  return;
+  if (new RegExp(`location\\.(href|replace)[^;]*(/${ctx.boardPath}/list|/list/)`).test(text)) return;
+  // No recognizable success signal — treat as a failure rather than a phantom
+  // success (the app must not claim a post went through when it didn't).
+  throw new InclassError("질문 등록에 실패했습니다. (사이트 응답을 확인하지 못했습니다)", text.slice(0, 300));
 }
 
 export function inclassViewUrl(ctx: InclassCtx, articleId: string): string {
