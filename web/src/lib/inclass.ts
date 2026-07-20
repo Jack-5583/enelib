@@ -48,6 +48,91 @@ const INCLASS_COOKIES: Record<string, () => string> = {
     ].join("; "),
 };
 
+/** Login credentials per lab (env-overridable). The inclass `www_auth_token`
+ * rotates on every login, so instead of hardcoding a token that goes stale the
+ * moment anyone logs in via a browser, we log in server-side to mint a fresh
+ * one on demand. */
+const INCLASS_CREDENTIALS: Record<string, () => { email: string; password: string }> = {
+  parkjongmin: () => ({
+    email: process.env.INCLASS_EMAIL || "enexoene@gmail.com",
+    password: process.env.INCLASS_PASSWORD || "gomathtop",
+  }),
+  kimbeomchan: () => ({
+    email: process.env.INCLASS_EMAIL_TIGERCHAN || "ks@chan.com",
+    password: process.env.INCLASS_PASSWORD_TIGERCHAN || "chanmath",
+  }),
+};
+
+const LOGIN_URL = "https://member.inclass.co.kr/member/login/proc/";
+
+// In-memory cache of freshly-logged-in auth tokens, keyed by lab. Warm
+// serverless instances reuse the token; a short TTL bounds staleness, and any
+// request that comes back unauthenticated forces a fresh login (see authCookie).
+const tokenCache = new Map<string, { token: string; expires: number }>();
+const TOKEN_TTL_MS = 5 * 60 * 1000;
+
+/** Pull a named cookie value out of a response's Set-Cookie headers. */
+function readSetCookie(res: Response, name: string): string | null {
+  const jar = typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [];
+  for (const c of jar) {
+    const m = new RegExp(`(?:^|;\\s*)${name}=([^;]+)`).exec(c);
+    const v = m?.[1];
+    if (v && v !== "deleted" && v !== "null") return v;
+  }
+  return null;
+}
+
+/** Log into inclass with the lab's shared account and return a fresh
+ * `www_auth_token`. Cached per lab; pass force=true to bypass the cache after an
+ * auth failure. Returns null if login can't be performed (no creds / network). */
+async function inclassLoginToken(labId: string, force = false): Promise<string | null> {
+  const cached = tokenCache.get(labId);
+  if (!force && cached && cached.expires > Date.now()) return cached.token;
+  const cred = INCLASS_CREDENTIALS[labId]?.();
+  if (!cred) return null;
+  const body = new URLSearchParams({
+    strBeforePage: "https://my.inclass.co.kr/",
+    login_userEMail: cred.email,
+    login_userPassword: cred.password,
+  });
+  let res: Response;
+  try {
+    res = await fetch(LOGIN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "User-Agent": UA,
+        Origin: "https://member.inclass.co.kr",
+        Referer: "https://member.inclass.co.kr/member/login/",
+        "X-Requested-With": "XMLHttpRequest",
+        Accept: "application/json, text/javascript, */*; q=0.01",
+      },
+      body: body.toString(),
+      redirect: "manual",
+    });
+  } catch {
+    return null;
+  }
+  const token = readSetCookie(res, "www_auth_token");
+  if (token) {
+    tokenCache.set(labId, { token, expires: Date.now() + TOKEN_TTL_MS });
+    return token;
+  }
+  return null;
+}
+
+/** Build the request cookie for board calls: a freshly-logged-in
+ * `www_auth_token` merged into the lab's cookie template. Falls back to the
+ * hardcoded/env cookie when login is unavailable. */
+async function authCookie(ctx: InclassCtx, force = false): Promise<string> {
+  const base = requireCookie(ctx);
+  const fresh = await inclassLoginToken(ctx.labId, force);
+  if (!fresh) return base;
+  return /www_auth_token=[^;]*/.test(base)
+    ? base.replace(/www_auth_token=[^;]*/, `www_auth_token=${fresh}`)
+    : `www_auth_token=${fresh}; ${base}`;
+}
+
 export interface InclassCtx {
   labId: string;
   labName: string;
@@ -90,7 +175,7 @@ export function inclassContext(labId: string, boardId?: string): InclassCtx {
 export async function inclassFetchCategories(ctx: InclassCtx): Promise<InclassCategory[]> {
   try {
     const res = await fetch(`${ctx.host}/${ctx.boardPath}/write/`, {
-      headers: { "User-Agent": UA, Cookie: requireCookie(ctx), Referer: `${ctx.host}/${ctx.boardPath}/list/?siteMenuIdx=${ctx.siteMenuIdx}` },
+      headers: { "User-Agent": UA, Cookie: await authCookie(ctx), Referer: `${ctx.host}/${ctx.boardPath}/list/?siteMenuIdx=${ctx.siteMenuIdx}` },
     });
     if (!res.ok) return [];
     const html = await res.text();
@@ -153,7 +238,7 @@ interface PostQuestionParams {
 /** Fetch a fresh short-lived (≈10s) upload token from the lab's site. */
 async function inclassToken(ctx: InclassCtx): Promise<string> {
   const res = await fetch(`${ctx.host}/_common/xhr/token.asp`, {
-    headers: { "User-Agent": UA, Cookie: requireCookie(ctx), Referer: `${ctx.host}/${ctx.boardPath}/write/` },
+    headers: { "User-Agent": UA, Cookie: await authCookie(ctx), Referer: `${ctx.host}/${ctx.boardPath}/write/` },
   });
   if (!res.ok) throw new InclassError("inclass 업로드 토큰을 받지 못했습니다.");
   return (await res.text()).trim().replace(/^["']|["']$/g, "");
@@ -199,7 +284,6 @@ export async function inclassUploadImage(
 /** Submit a new question to the lab's board. Success is a redirect (or success
  * alert) back to the list; genuine validation failures are surfaced verbatim. */
 export async function inclassPostQuestion(ctx: InclassCtx, params: PostQuestionParams): Promise<void> {
-  const cookie = requireCookie(ctx);
   const fp = new URLSearchParams({
     tblBoardQNAIdx: "",
     isMode: "",
@@ -217,50 +301,56 @@ export async function inclassPostQuestion(ctx: InclassCtx, params: PostQuestionP
     fp.append("fileKey", a.fileKey);
   }
 
-  let res: Response;
-  try {
-    res = await fetch(`${ctx.host}/${ctx.boardPath}/write/proc/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "User-Agent": UA,
-        Referer: `${ctx.host}/${ctx.boardPath}/write/`,
-        Origin: ctx.host,
-        Cookie: cookie,
-      },
-      body: fp.toString(),
-      redirect: "manual",
-    });
-  } catch {
-    throw new InclassError(`${ctx.labName}에 연결하지 못했습니다.`);
-  }
-
-  // A redirect is only success when it goes back to the board; a redirect to the
-  // login/mypage means our shared session expired (so we must NOT report success).
-  if (res.status >= 300 && res.status < 400) {
-    const loc = res.headers.get("location") || "";
-    if (/member|login|mypage/i.test(loc)) {
-      throw new InclassError("inclass 세션이 만료되었습니다. 관리자 인증 정보를 갱신해 주세요.", loc);
+  // Post with the current session; if the site bounces us to login (the shared
+  // token rotated out from under us), log in fresh and try exactly once more.
+  // Returns "ok" on success, "expired" when the session was rejected.
+  const attempt = async (cookie: string): Promise<"ok" | "expired"> => {
+    let res: Response;
+    try {
+      res = await fetch(`${ctx.host}/${ctx.boardPath}/write/proc/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "User-Agent": UA,
+          Referer: `${ctx.host}/${ctx.boardPath}/write/`,
+          Origin: ctx.host,
+          Cookie: cookie,
+        },
+        body: fp.toString(),
+        redirect: "manual",
+      });
+    } catch {
+      throw new InclassError(`${ctx.labName}에 연결하지 못했습니다.`);
     }
-    return;
-  }
 
-  const text = await res.text().catch(() => "");
-  const alert = extractAlert(text);
-  // proc/ replies 200 with a script that alerts then redirects. A success alert
-  // (e.g. "등록되었습니다") must NOT be treated as an error.
-  if (alert) {
-    const isFailure = /실패|오류|에러|없|선택해|입력해|초과|불가|아닙니다|주세요|다시/.test(alert);
-    if (!isFailure) return;
-    throw new InclassError(alert, text);
+    // A redirect is only success when it goes back to the board; a redirect to
+    // login/mypage means our shared session expired.
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("location") || "";
+      return /member|login|mypage/i.test(loc) ? "expired" : "ok";
+    }
+
+    const text = await res.text().catch(() => "");
+    const alert = extractAlert(text);
+    // proc/ replies 200 with a script that alerts then redirects. A success
+    // alert (e.g. "등록되었습니다") must NOT be treated as an error.
+    if (alert) {
+      const isFailure = /실패|오류|에러|없|선택해|입력해|초과|불가|아닙니다|주세요|다시/.test(alert);
+      if (!isFailure) return "ok";
+      throw new InclassError(alert, text);
+    }
+    if (/member\/login|로그인|mypage/.test(text)) return "expired";
+    if (new RegExp(`location\\.(href|replace)[^;]*(/${ctx.boardPath}/list|/list/)`).test(text)) return "ok";
+    // No recognizable success signal — treat as a failure rather than a phantom
+    // success (the app must not claim a post went through when it didn't).
+    throw new InclassError("질문 등록에 실패했습니다. (사이트 응답을 확인하지 못했습니다)", text.slice(0, 300));
+  };
+
+  let result = await attempt(await authCookie(ctx));
+  if (result === "expired") result = await attempt(await authCookie(ctx, true));
+  if (result === "expired") {
+    throw new InclassError("inclass 세션이 만료되었습니다. 관리자 인증 정보를 갱신해 주세요.");
   }
-  if (/member\/login|로그인|mypage/.test(text)) {
-    throw new InclassError("inclass 세션이 만료되었습니다. 관리자 인증 정보를 갱신해 주세요.", text);
-  }
-  if (new RegExp(`location\\.(href|replace)[^;]*(/${ctx.boardPath}/list|/list/)`).test(text)) return;
-  // No recognizable success signal — treat as a failure rather than a phantom
-  // success (the app must not claim a post went through when it didn't).
-  throw new InclassError("질문 등록에 실패했습니다. (사이트 응답을 확인하지 못했습니다)", text.slice(0, 300));
 }
 
 export function inclassViewUrl(ctx: InclassCtx, articleId: string): string {
@@ -280,7 +370,7 @@ async function inclassFetchListRows(ctx: InclassCtx): Promise<{ id: string; titl
       "X-Requested-With": "XMLHttpRequest",
       Referer: `${ctx.host}/${ctx.boardPath}/list/?siteMenuIdx=${ctx.siteMenuIdx}`,
       Origin: ctx.host,
-      Cookie: requireCookie(ctx),
+      Cookie: await authCookie(ctx),
     },
     body: "=&aGotoPage=1&boardCategory=&boardTotalCounts=0&searchTitles=&aTotalPageCountFix=0&contentstotalCountsFix=0",
   });
@@ -317,7 +407,7 @@ export async function inclassFindArticleId(ctx: InclassCtx, title: string): Prom
 export async function inclassFetchAnswer(ctx: InclassCtx, articleId: string): Promise<{ text: string } | null> {
   try {
     const res = await fetch(inclassViewUrl(ctx, articleId), {
-      headers: { "User-Agent": UA, Cookie: requireCookie(ctx) },
+      headers: { "User-Agent": UA, Cookie: await authCookie(ctx) },
     });
     if (!res.ok) return null;
     const html = await res.text();
