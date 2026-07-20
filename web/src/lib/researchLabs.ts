@@ -97,7 +97,10 @@ export const RESEARCH_LABS: ResearchLab[] = [
     kind: "inclass",
     host: "https://gomathtop.inclass.co.kr",
     homeUrl: "https://gomathtop.inclass.co.kr/boardQnAS/list/?siteMenuIdx=137567",
-    boards: [{ id: "qna", name: "수학 질문", menuid: "137567", path: "boardQnAS" }],
+    boards: [
+      { id: "qna", name: "수학 질문", menuid: "137567", path: "boardQnAS" },
+      { id: "etc", name: "기타 질문", menuid: "137568", path: "boardQnA4" },
+    ],
   },
   {
     id: "kimbeomchan",
