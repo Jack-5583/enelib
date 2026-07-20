@@ -70,10 +70,12 @@ export function Camstudy() {
   const captureRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastCaptureRef = useRef<Date | null>(null);
   const [pipActive, setPipActive] = useState(false);
+  const [pipNote, setPipNote] = useState<string | null>(null);
   const runningRef = useRef(false);
   const pipVideoRef = useRef<HTMLVideoElement | null>(null);
   const pipCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const pipDrawRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   useEffect(() => {
     fetch("/api/todos?range=today")
@@ -90,6 +92,7 @@ export function Camstudy() {
       if (captureRef.current) clearInterval(captureRef.current);
       if (pipDrawRef.current) clearInterval(pipDrawRef.current);
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      wakeLockRef.current?.release().catch(() => {});
       if (typeof document !== "undefined" && document.pictureInPictureElement) {
         document.exitPictureInPicture().catch(() => {});
       }
@@ -217,27 +220,62 @@ export function Camstudy() {
     }
   }
 
-  async function enterPip() {
-    const pv = pipVideoRef.current;
-    if (typeof document === "undefined" || !document.pictureInPictureEnabled || !pv) return;
-    if (document.pictureInPictureElement) return;
-    ensurePipStream();
-    try {
-      // Fast path: stream already playing (set up when the session started) —
-      // this is the first await, so the click's user activation is intact.
-      await pv.requestPictureInPicture();
-      setPipActive(true);
-    } catch {
-      // Stream may not have been playing yet; start it and retry once.
+  // iOS/iPadOS uses WebKit's presentation-mode API (not the standard PiP one),
+  // shows only a plain <video> (no canvas compositing → no timer overlay), and
+  // is blocked entirely inside a Home-Screen web app. Best-effort: PiP the raw
+  // camera when the WebKit API is actually available (Safari browser only).
+  function iosPipTry(): boolean {
+    const v = videoRef.current as (HTMLVideoElement & {
+      webkitSupportsPresentationMode?: (m: string) => boolean;
+      webkitSetPresentationMode?: (m: string) => void;
+    }) | null;
+    if (v?.webkitSupportsPresentationMode?.("picture-in-picture")) {
       try {
-        await pv.play();
-        await pv.requestPictureInPicture();
+        v.webkitSetPresentationMode!("picture-in-picture");
         setPipActive(true);
+        return true;
       } catch {
-        setPipActive(false);
-        setCameraError("이 브라우저에서는 PiP를 쓸 수 없어요. (Chrome/Edge/Safari 최신 버전 권장)");
+        /* fall through */
       }
     }
+    return false;
+  }
+
+  async function enterPip() {
+    setPipNote(null);
+    const pv = pipVideoRef.current;
+    if (typeof document !== "undefined" && document.pictureInPictureEnabled && pv && !document.pictureInPictureElement) {
+      ensurePipStream();
+      try {
+        // Fast path: stream already playing (set up when the session started) —
+        // this is the first await, so the click's user activation is intact.
+        await pv.requestPictureInPicture();
+        setPipActive(true);
+        return;
+      } catch {
+        try {
+          await pv.play();
+          await pv.requestPictureInPicture();
+          setPipActive(true);
+          return;
+        } catch {
+          /* fall through to platform fallbacks */
+        }
+      }
+    }
+    // iOS Safari (browser) fallback — camera only, no timer overlay.
+    if (iosPipTry()) return;
+    // No PiP available (most commonly an iPad Home-Screen web app).
+    setPipActive(false);
+    const isIOS =
+      typeof navigator !== "undefined" &&
+      (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && (navigator as Navigator & { maxTouchPoints: number }).maxTouchPoints > 1));
+    setPipNote(
+      isIOS
+        ? "아이패드 홈 화면 앱에서는 애플 제약으로 PiP를 쓸 수 없어요. ① Split View로 이 앱을 다른 앱과 나란히 두거나 ② Safari로 열면 카메라 PiP가 됩니다. 화면은 자동으로 꺼지지 않게 해뒀어요."
+        : "이 브라우저에서는 PiP를 쓸 수 없어요. (Chrome·Edge·데스크톱 Safari 최신 버전 권장)"
+    );
   }
 
   async function exitPip() {
@@ -246,7 +284,33 @@ export function Camstudy() {
     } catch {
       /* ignore */
     }
+    const v = videoRef.current as (HTMLVideoElement & { webkitSetPresentationMode?: (m: string) => void }) | null;
+    try {
+      v?.webkitSetPresentationMode?.("inline");
+    } catch {
+      /* ignore */
+    }
     setPipActive(false);
+  }
+
+  // Keep the screen awake during a session — the practical stand-in for PiP on
+  // iPad Home-Screen apps, where the screen would otherwise dim/lock.
+  async function requestWakeLock() {
+    try {
+      if ("wakeLock" in navigator) {
+        wakeLockRef.current = await navigator.wakeLock.request("screen");
+      }
+    } catch {
+      /* not supported / denied — ignore */
+    }
+  }
+  function releaseWakeLock() {
+    try {
+      wakeLockRef.current?.release();
+    } catch {
+      /* ignore */
+    }
+    wakeLockRef.current = null;
   }
 
   // Keep the PiP pipeline ready while a session runs; tear it down when it ends.
@@ -284,6 +348,8 @@ export function Camstudy() {
         if (runningRef.current) enterPip();
       } else {
         exitPip();
+        // Wake locks are released when the page hides; re-acquire on return.
+        if (runningRef.current) requestWakeLock();
       }
     };
     document.addEventListener("visibilitychange", onVis);
@@ -347,6 +413,7 @@ export function Camstudy() {
     setSeconds(0);
     setRunning(true);
     runningRef.current = true;
+    requestWakeLock();
     tickRef.current = setInterval(() => {
       secondsRef.current += 1;
       setSeconds(secondsRef.current);
@@ -363,6 +430,8 @@ export function Camstudy() {
     streamRef.current = null;
     runningRef.current = false;
     await exitPip();
+    releaseWakeLock();
+    setPipNote(null);
     setRunning(false);
     setPreviewOn(false);
     if (sessionIdRef.current) {
@@ -420,6 +489,18 @@ export function Camstudy() {
           </div>
 
           {cameraError && <p className="m-0 py-2 text-center text-[13px] text-[#e0362f]">{cameraError}</p>}
+          {pipNote && (
+            <div className="mt-3 flex items-start gap-2 rounded-[2px] border border-[#16161614] bg-[#f4f4f4] px-3 py-2.5">
+              <p className="m-0 text-[12px] leading-5 text-[#161616]/70">{pipNote}</p>
+              <button
+                onClick={() => setPipNote(null)}
+                aria-label="닫기"
+                className="ml-auto flex-none border-none bg-transparent p-0 text-[14px] text-[#161616]/40"
+              >
+                ×
+              </button>
+            </div>
+          )}
           <p className="m-0 py-3.5 text-center text-[13px] leading-5 text-[#161616]/50 lg:text-[14px] lg:leading-6">
             {running ? `녹화 중 · ${interval}분마다 자동 촬영` : "웹캠을 선택하고 학습을 시작하세요"}
           </p>
