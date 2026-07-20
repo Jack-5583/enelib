@@ -26,14 +26,15 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         articleId,
         articleUrl: inclassViewUrl(ctx, articleId),
         answerText: answer?.text ?? q.answerText,
+        answerImages: answer ? answer.images : q.answerImages,
         answeredAt: answer ? (q.answeredAt ?? new Date()) : q.answeredAt,
         commentCount: answer ? 1 : q.commentCount,
         hasUnseenReply: false,
       },
     });
-    return NextResponse.json({ answerText: updated.answerText, answeredAt: updated.answeredAt });
+    return NextResponse.json({ answerText: updated.answerText, answerImages: updated.answerImages, answeredAt: updated.answeredAt });
   } catch {
     if (q.hasUnseenReply) await prisma.inclassQuestion.update({ where: { id: q.id }, data: { hasUnseenReply: false } }).catch(() => {});
-    return NextResponse.json({ answerText: q.answerText, answeredAt: q.answeredAt });
+    return NextResponse.json({ answerText: q.answerText, answerImages: q.answerImages, answeredAt: q.answeredAt });
   }
 }

@@ -403,8 +403,17 @@ export async function inclassFindArticleId(ctx: InclassCtx, title: string): Prom
   }
 }
 
-/** Scrape the teacher's reply from a question's view page, if one exists. */
-export async function inclassFetchAnswer(ctx: InclassCtx, articleId: string): Promise<{ text: string } | null> {
+// Attached files on inclass boards are served from this host (the site's own
+// downloadFileFromS3 uses it). The fileKey already includes the folder path.
+const FILE_HOST = "https://file.inclass.co.kr/";
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|heic|heif|svg)$/i;
+
+/** Scrape the teacher's reply (text + any attached image URLs) from a
+ * question's view page, if one exists. */
+export async function inclassFetchAnswer(
+  ctx: InclassCtx,
+  articleId: string
+): Promise<{ text: string; images: string[] } | null> {
   try {
     const res = await fetch(inclassViewUrl(ctx, articleId), {
       headers: { "User-Agent": UA, Cookie: await authCookie(ctx) },
@@ -423,9 +432,25 @@ export async function inclassFetchAnswer(ctx: InclassCtx, articleId: string): Pr
     const m =
       /ck-content\b[^>]*>([\s\S]*?)<\/div>\s*(?:<!--|<div[^>]*\bre-attachment)/i.exec(scope) ||
       /ck-content\b[^>]*>([\s\S]*?)<\/div>/i.exec(scope);
-    if (!m) return null;
-    const text = htmlToText(m[1]);
-    return text ? { text } : null;
+    const text = m ? htmlToText(m[1]) : "";
+
+    // Reply attachments live in `re-attachment-placeholder`; each file pairs a
+    // filename (in the <a>) with a hidden `fileKey` input. Keep only images.
+    const images: string[] = [];
+    const attStart = scope.search(/re-attachment-placeholder/i);
+    if (attStart >= 0) {
+      const attScope = scope.slice(attStart);
+      const fileRe = /<a\b[^>]*>\s*(?:<i[^>]*>[\s\S]*?<\/i>)?\s*([^<]+?)\s*<\/a>[\s\S]*?class=["']fileKey["'][^>]*value=["']([^"']+)["']/gi;
+      let fm: RegExpExecArray | null;
+      while ((fm = fileRe.exec(attScope))) {
+        const name = fm[1].trim();
+        const key = fm[2].trim();
+        if (key && IMAGE_EXT.test(name)) images.push(FILE_HOST + key.replace(/^\/+/, ""));
+      }
+    }
+
+    if (!text && images.length === 0) return null;
+    return { text, images };
   } catch {
     return null;
   }
@@ -434,7 +459,7 @@ export async function inclassFetchAnswer(ctx: InclassCtx, articleId: string): Pr
 function htmlToText(html: string): string {
   return html
     .replace(/<\s*br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/(?:p|div)>/gi, "\n")
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")

@@ -63,6 +63,7 @@ export async function GET() {
         imagePaths: q.imagePaths,
         articleUrl: q.articleUrl,
         answerText: q.answerText,
+        answerImages: q.answerImages,
         answeredAt: q.answeredAt,
         commentCount: q.commentCount,
         hasUnseenReply: q.hasUnseenReply,

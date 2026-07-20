@@ -434,6 +434,7 @@ model InclassQuestion {
   articleId      String?
   articleUrl     String?
   answerText     String?  @db.Text
+  answerImages   String[] @default([])
   answeredAt     DateTime?
   commentCount   Int      @default(0)
   hasUnseenReply Boolean  @default(false)

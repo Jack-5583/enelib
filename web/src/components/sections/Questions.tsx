@@ -73,6 +73,7 @@ interface QuestionItem {
   cafeArticleUrl?: string | null;
   articleUrl?: string | null;
   answerText?: string | null;
+  answerImages?: string[];
   commentCount: number;
   hasUnseenReply: boolean;
   done: boolean;
@@ -970,15 +971,19 @@ function InclassComposeForm({
 function InclassDetailSheet({ item, onClose }: { item: QuestionItem; onClose: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const [answer, setAnswer] = useState<string | null>(item.answerText ?? null);
+  const [answerImages, setAnswerImages] = useState<string[]>(item.answerImages ?? []);
   const [loadingAnswer, setLoadingAnswer] = useState(false);
+
+  function applyAnswer(d: { answerText?: unknown; answerImages?: unknown }) {
+    if (typeof d.answerText === "string") setAnswer(d.answerText);
+    if (Array.isArray(d.answerImages)) setAnswerImages(d.answerImages.filter((x): x is string => typeof x === "string"));
+  }
 
   function loadAnswer() {
     setLoadingAnswer(true);
     fetch(`/api/inclass/questions/${item.id}/refresh`, { method: "POST" })
       .then((r) => r.json())
-      .then((d) => {
-        if (typeof d.answerText === "string") setAnswer(d.answerText);
-      })
+      .then(applyAnswer)
       .finally(() => setLoadingAnswer(false));
   }
 
@@ -987,7 +992,7 @@ function InclassDetailSheet({ item, onClose }: { item: QuestionItem; onClose: ()
     fetch(`/api/inclass/questions/${item.id}/refresh`, { method: "POST" })
       .then((r) => r.json())
       .then((d) => {
-        if (active && typeof d.answerText === "string") setAnswer(d.answerText);
+        if (active) applyAnswer(d);
       })
       .catch(() => {});
     return () => {
@@ -1028,8 +1033,17 @@ function InclassDetailSheet({ item, onClose }: { item: QuestionItem; onClose: ()
             새로고침
           </button>
         </div>
-        {answer ? (
-          <p className="m-0 text-[14px] leading-6 whitespace-pre-wrap text-[#393939]">{answer}</p>
+        {answer || answerImages.length > 0 ? (
+          <>
+            {answer && <p className="m-0 text-[14px] leading-6 whitespace-pre-wrap text-[#393939]">{answer}</p>}
+            {answerImages.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {answerImages.map((url, i) => (
+                  <Zoomable key={i} src={url} className="h-32 w-32 rounded-[2px] border border-[#16161614] object-cover" />
+                ))}
+              </div>
+            )}
+          </>
         ) : loadingAnswer ? (
           <p className="m-0 py-4 text-center text-[13px] text-[#161616]/40">답변 확인 중…</p>
         ) : (
