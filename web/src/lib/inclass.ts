@@ -38,7 +38,14 @@ const INCLASS_COOKIES: Record<string, () => string> = {
       "inclass=paramKey=gomathtop",
       "ASPSESSIONIDQQDAQDCB=AKOODMKALHEAFOJAAPLEPDHG",
     ].join("; "),
-  kimbeomchan: () => process.env.INCLASS_COOKIE_TIGERCHAN || "",
+  kimbeomchan: () =>
+    process.env.INCLASS_COOKIE_TIGERCHAN ||
+    [
+      "siteVisited%5Ftigerchan=Y",
+      "www_auth_token=653b1b9bcea24fb990b522a097e21fd9653b1b9bcea24fb990b522a097e21fd9",
+      "inclass=paramKey=tigerchan",
+      "ASPSESSIONIDSSCCRBDB=LOACOAJCAHINBHGBEAJBIFDB",
+    ].join("; "),
 };
 
 export interface InclassCtx {
@@ -219,7 +226,9 @@ export function inclassViewUrl(ctx: InclassCtx, articleId: string): string {
 /** The board list is rendered from an ajax fragment; fetch it and read the rows
  * (public rows link to `../view/?tblBoardQNAIdx=NNN`). Returns rows newest-first. */
 async function inclassFetchListRows(ctx: InclassCtx): Promise<{ id: string; title: string; answered: boolean }[]> {
-  const res = await fetch(`${ctx.host}/${ctx.boardPath}/xhr/`, {
+  // The list is rendered from an ajax fragment at …/list/xhr/ (relative to the
+  // list page), not …/xhr/.
+  const res = await fetch(`${ctx.host}/${ctx.boardPath}/list/xhr/`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
@@ -229,7 +238,7 @@ async function inclassFetchListRows(ctx: InclassCtx): Promise<{ id: string; titl
       Origin: ctx.host,
       Cookie: requireCookie(ctx),
     },
-    body: "aGotoPage=1&boardCategory=&boardTotalCounts=0&searchTitles=",
+    body: "=&aGotoPage=1&boardCategory=&boardTotalCounts=0&searchTitles=&aTotalPageCountFix=0&contentstotalCountsFix=0",
   });
   if (!res.ok) return [];
   const html = await res.text();
