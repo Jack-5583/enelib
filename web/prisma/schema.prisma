@@ -426,6 +426,8 @@ model InclassQuestion {
   id             String   @id @default(cuid())
   ownerId        String
   owner          User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  labId          String?  // research lab id (parkjongmin, kimbeomchan, …)
+  boardId        String?  // board id within the lab
   subject        String
   body           String   @db.Text
   imagePaths     String[] @default([])

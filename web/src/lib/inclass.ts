@@ -1,16 +1,14 @@
 import "server-only";
+import { getResearchLab } from "@/lib/researchLabs";
 
-// Client for 박종민수학연구소 on the inclass platform (gomathtop.inclass.co.kr).
-// The site has no public API; auth is carried by inclass session cookies across
-// *.inclass.co.kr (chiefly `www_auth_token`, plus a per-visit `ASPSESSIONID…`).
-// We post through one shared account, exactly like the 호형훈제 integration —
-// no captcha here, just a plain form POST to the board's write handler. The
-// board list is rendered client-side from an ajax fragment, so we read that
-// fragment (not the list page shell) to find our just-posted article id.
+// Client for inclass-platform research labs (e.g. 박종민 gomathtop, 김범찬
+// tigerchan). The site has no public API; auth is carried by inclass session
+// cookies across *.inclass.co.kr (chiefly `www_auth_token`, plus a per-visit
+// `ASPSESSIONID…`). We post through one shared account per lab — no captcha,
+// just a plain form POST to the board's write handler. The board list is
+// rendered client-side from an ajax fragment, so we read that fragment (not the
+// list page shell) to find our just-posted article id.
 
-const BASE = "https://gomathtop.inclass.co.kr";
-// The "수학 질문" board (boardQnAS) menu id, from the write/list URLs.
-const SITE_MENU_IDX = "137567";
 // File uploads go to a separate JWT-authed API and land in this S3 bucket.
 const API = "https://api.inclass.kr";
 const S3_BUCKET = "https://inclass-file.s3.ap-northeast-2.amazonaws.com/";
@@ -28,29 +26,55 @@ export class InclassError extends Error {
   }
 }
 
-/** The shared inclass session all questions are posted through. Overridable via
- * env (INCLASS_COOKIE) so the live session can be refreshed without a redeploy;
- * falls back to the captured session so no setup is required. `www_auth_token`
- * is the persistent auth; the ASP session is re-minted per request. */
-export function inclassCookie(): string {
-  return (
+/** The shared inclass session cookie for each lab. Overridable via env so a
+ * live session can be refreshed without a redeploy. `www_auth_token` is the
+ * persistent auth; the ASP session is re-minted per request. */
+const INCLASS_COOKIES: Record<string, () => string> = {
+  parkjongmin: () =>
     process.env.INCLASS_COOKIE ||
     [
       "siteVisited%5Fgomathtop=Y",
       "www_auth_token=5f3039d984ec47b8be54052be23a71c15f3039d984ec47b8be54052be23a71c1",
       "inclass=paramKey=gomathtop",
       "ASPSESSIONIDQQDAQDCB=AKOODMKALHEAFOJAAPLEPDHG",
-    ].join("; ")
-  );
+    ].join("; "),
+  kimbeomchan: () => process.env.INCLASS_COOKIE_TIGERCHAN || "",
+};
+
+export interface InclassCtx {
+  labId: string;
+  labName: string;
+  subject: string;
+  host: string;
+  cookie: string;
+  boardPath: string;
+  siteMenuIdx: string;
 }
 
-/** The shared inclass login (kept for a future server-side re-login; posting
- * currently relies on the stored cookie). */
-export function inclassCredentials(): { userId: string; userPass: string } {
+/** Build the request context (site host, board path, session cookie) for a
+ * given lab + board. Throws if the lab isn't an inclass lab. */
+export function inclassContext(labId: string, boardId?: string): InclassCtx {
+  const lab = getResearchLab(labId);
+  if (!lab || lab.kind !== "inclass" || !lab.host) {
+    throw new InclassError("잘못된 연구소입니다.");
+  }
+  const board = lab.boards.find((b) => b.id === boardId) ?? lab.boards[0];
   return {
-    userId: process.env.INCLASS_USER_ID || "enexoene@gmail.com",
-    userPass: process.env.INCLASS_USER_PASS || "gomathtop",
+    labId,
+    labName: lab.name,
+    subject: lab.subject,
+    host: lab.host,
+    cookie: (INCLASS_COOKIES[labId]?.() ?? "").trim(),
+    boardPath: board.path ?? "boardQnAS",
+    siteMenuIdx: board.menuid,
   };
+}
+
+function requireCookie(ctx: InclassCtx): string {
+  if (!ctx.cookie) {
+    throw new InclassError(`${ctx.labName} inclass 인증 정보가 아직 설정되지 않았습니다.`);
+  }
+  return ctx.cookie;
 }
 
 function extractAlert(html: string): string | null {
@@ -73,42 +97,34 @@ export function buildInclassContentHtml(text: string): string {
 /** A photo attachment, already uploaded to inclass and moved to its permanent
  * location, ready to be referenced in the write form. */
 export interface InclassAttachment {
-  /** fileUpNM form value — the permanent key's filename part. */
   fileUpNM: string;
-  /** fileKey form value — the full permanent key (board/qna/<uuid>). */
   fileKey: string;
-  /** Public S3 URL, for in-app preview. */
   url: string;
 }
 
 interface PostQuestionParams {
   title: string;
   contentHtml: string;
-  /** false → 공개 질문 (default; needed so we can find & read it back); true → 비공개. */
+  /** false → 공개 질문; true → 비공개 (default here). */
   secret?: boolean;
   attachments?: InclassAttachment[];
 }
 
-/** Fetch a fresh short-lived (≈10s) upload token. The board mints it from the
- * session cookie via token.asp and returns it as plain text; the file API
- * expects it as a Bearer token. */
-async function inclassToken(cookie: string): Promise<string> {
-  const res = await fetch(`${BASE}/_common/xhr/token.asp`, {
-    headers: { "User-Agent": UA, Cookie: cookie, Referer: `${BASE}/boardQnAS/write/` },
+/** Fetch a fresh short-lived (≈10s) upload token from the lab's site. */
+async function inclassToken(ctx: InclassCtx): Promise<string> {
+  const res = await fetch(`${ctx.host}/_common/xhr/token.asp`, {
+    headers: { "User-Agent": UA, Cookie: requireCookie(ctx), Referer: `${ctx.host}/${ctx.boardPath}/write/` },
   });
   if (!res.ok) throw new InclassError("inclass 업로드 토큰을 받지 못했습니다.");
   return (await res.text()).trim().replace(/^["']|["']$/g, "");
 }
 
-/** Upload one image to inclass on the shared account, then move it from temp to
- * the board's permanent folder — mirroring the site's uploader.saveFiles(). The
- * token is short-lived, so we mint a fresh one for each call. Returns the form
- * references + a public URL for preview. */
+/** Upload one image on the lab's shared account, then move it from temp to the
+ * board's permanent folder — mirroring the site's uploader.saveFiles(). */
 export async function inclassUploadImage(
-  cookie: string,
+  ctx: InclassCtx,
   image: { buffer: Buffer; filename: string; contentType: string }
 ): Promise<InclassAttachment> {
-  // 1) Upload into temp/.
   const form = new FormData();
   form.append("file", new Blob([new Uint8Array(image.buffer)], { type: image.contentType }), image.filename);
   form.append("folderName", "temp");
@@ -116,21 +132,20 @@ export async function inclassUploadImage(
 
   const up = await fetch(`${API}/sls/v1/file/upload`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${await inclassToken(cookie)}`, Origin: BASE, Referer: `${BASE}/` },
+    headers: { Authorization: `Bearer ${await inclassToken(ctx)}`, Origin: ctx.host, Referer: `${ctx.host}/` },
     body: form,
   });
   const upData = (await up.json().catch(() => null)) as { Key?: string; key?: string } | null;
   const tempKey = upData?.Key || upData?.key;
   if (!tempKey) throw new InclassError("이미지 업로드에 실패했습니다.");
 
-  // 2) Move temp → permanent (board/qna/…).
   const save = await fetch(`${API}/sls/v1/file`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${await inclassToken(cookie)}`,
+      Authorization: `Bearer ${await inclassToken(ctx)}`,
       "Content-Type": "application/json",
-      Origin: BASE,
-      Referer: `${BASE}/`,
+      Origin: ctx.host,
+      Referer: `${ctx.host}/`,
     },
     body: JSON.stringify({ folderName: FILE_FOLDER, key: tempKey }),
   });
@@ -141,11 +156,10 @@ export async function inclassUploadImage(
   return { fileUpNM: permKey.split("/").pop() || permKey, fileKey: permKey, url: `${S3_BUCKET}${permKey}` };
 }
 
-/** Submit a new question to the board. Success is a redirect back to the list;
- * inclass reports validation problems (e.g. a required 분류/상품) via an alert we
- * surface verbatim. */
-export async function inclassPostQuestion(params: PostQuestionParams): Promise<void> {
-  const cookie = inclassCookie();
+/** Submit a new question to the lab's board. Success is a redirect (or success
+ * alert) back to the list; genuine validation failures are surfaced verbatim. */
+export async function inclassPostQuestion(ctx: InclassCtx, params: PostQuestionParams): Promise<void> {
+  const cookie = requireCookie(ctx);
   const fp = new URLSearchParams({
     tblBoardQNAIdx: "",
     isMode: "",
@@ -155,11 +169,8 @@ export async function inclassPostQuestion(params: PostQuestionParams): Promise<v
     contents: params.contentHtml,
     isTitleSecret: "N",
   });
-  // Questions are always posted 비공개 (작성자만 열람) — the "이 질문은 공개하지
-  // 않겠습니다" checkbox is effectively always on. It submits as isOpen=N.
+  // Always 비공개 (작성자만 열람).
   fp.set("isOpen", "N");
-  // Each attachment adds a fileUpNM + fileKey pair, exactly like the site's
-  // per-file hidden inputs after saveFiles().
   for (const a of params.attachments ?? []) {
     fp.append("fileUpNM", a.fileUpNM);
     fp.append("fileKey", a.fileKey);
@@ -167,62 +178,56 @@ export async function inclassPostQuestion(params: PostQuestionParams): Promise<v
 
   let res: Response;
   try {
-    res = await fetch(`${BASE}/boardQnAS/write/proc/`, {
+    res = await fetch(`${ctx.host}/${ctx.boardPath}/write/proc/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         "User-Agent": UA,
-        Referer: `${BASE}/boardQnAS/write/`,
-        Origin: BASE,
+        Referer: `${ctx.host}/${ctx.boardPath}/write/`,
+        Origin: ctx.host,
         Cookie: cookie,
       },
       body: fp.toString(),
       redirect: "manual",
     });
   } catch {
-    throw new InclassError("박종민수학연구소에 연결하지 못했습니다.");
+    throw new InclassError(`${ctx.labName}에 연결하지 못했습니다.`);
   }
 
-  // A redirect (to the list) is the success signal.
   if (res.status >= 300 && res.status < 400) return;
 
   const text = await res.text().catch(() => "");
   const alert = extractAlert(text);
   // proc/ replies 200 with a script that alerts then redirects. A success alert
-  // (e.g. "등록되었습니다") must NOT be treated as an error — only genuine failure
-  // alerts should be surfaced.
+  // (e.g. "등록되었습니다") must NOT be treated as an error.
   if (alert) {
     const isFailure = /실패|오류|에러|없|선택해|입력해|초과|불가|아닙니다|주세요|다시/.test(alert);
-    if (!isFailure) return; // success alert
+    if (!isFailure) return;
     throw new InclassError(alert, text);
   }
-  if (/location\.(href|replace)|\/boardQnAS\/list/.test(text)) return;
+  if (new RegExp(`location\\.(href|replace)|/${ctx.boardPath}/list`).test(text)) return;
   if (/member\/login|로그인/.test(text)) {
     throw new InclassError("inclass 세션이 만료되었습니다. 관리자 인증 정보를 갱신해 주세요.", text);
   }
-  // No alert and no obvious signal: assume the write went through (the site
-  // typically 302s or alerts on success) rather than block a valid post.
   return;
 }
 
-export function inclassViewUrl(articleId: string): string {
-  return `${BASE}/boardQnAS/view/?tblBoardQNAIdx=${articleId}`;
+export function inclassViewUrl(ctx: InclassCtx, articleId: string): string {
+  return `${ctx.host}/${ctx.boardPath}/view/?tblBoardQNAIdx=${articleId}`;
 }
 
-/** The board list is rendered client-side from an ajax fragment, so we fetch that
- * fragment (not the list page shell) and read the rows. Each public row links to
- * `../view/?tblBoardQNAIdx=NNN` and carries an 답변 완료/대기 status; private posts
- * have a `javascript:` alert instead of a link. Returns rows newest-first. */
-async function inclassFetchListRows(): Promise<{ id: string; title: string; answered: boolean }[]> {
-  const res = await fetch(`${BASE}/boardQnAS/xhr/`, {
+/** The board list is rendered from an ajax fragment; fetch it and read the rows
+ * (public rows link to `../view/?tblBoardQNAIdx=NNN`). Returns rows newest-first. */
+async function inclassFetchListRows(ctx: InclassCtx): Promise<{ id: string; title: string; answered: boolean }[]> {
+  const res = await fetch(`${ctx.host}/${ctx.boardPath}/xhr/`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
       "User-Agent": UA,
       "X-Requested-With": "XMLHttpRequest",
-      Referer: `${BASE}/boardQnAS/list/?siteMenuIdx=${SITE_MENU_IDX}`,
-      Origin: BASE,
-      Cookie: inclassCookie(),
+      Referer: `${ctx.host}/${ctx.boardPath}/list/?siteMenuIdx=${ctx.siteMenuIdx}`,
+      Origin: ctx.host,
+      Cookie: requireCookie(ctx),
     },
     body: "aGotoPage=1&boardCategory=&boardTotalCounts=0&searchTitles=",
   });
@@ -240,12 +245,10 @@ async function inclassFetchListRows(): Promise<{ id: string; title: string; answ
   return rows;
 }
 
-/** Posting doesn't return the new article id, so right after a successful post we
- * look it up from the list: the newest public row whose title matches ours (else
- * the largest id on the first page). Best-effort — null if nothing matches. */
-export async function inclassFindArticleId(title: string): Promise<string | null> {
+/** Look up the just-posted article's id from the board list. Best-effort. */
+export async function inclassFindArticleId(ctx: InclassCtx, title: string): Promise<string | null> {
   try {
-    const rows = await inclassFetchListRows();
+    const rows = await inclassFetchListRows(ctx);
     if (!rows.length) return null;
     const want = htmlToText(title);
     const match = rows.find((r) => r.title === want) || rows.find((r) => r.title.includes(want));
@@ -257,13 +260,11 @@ export async function inclassFindArticleId(title: string): Promise<string | null
   }
 }
 
-/** Scrape the teacher's reply from a question's view page, if one exists.
- * Best-effort: inclass renders the answer inside a reply/답변 block; returns null
- * when there's no answer or the markup isn't recognised. */
-export async function inclassFetchAnswer(articleId: string): Promise<{ text: string } | null> {
+/** Scrape the teacher's reply from a question's view page, if one exists. */
+export async function inclassFetchAnswer(ctx: InclassCtx, articleId: string): Promise<{ text: string } | null> {
   try {
-    const res = await fetch(inclassViewUrl(articleId), {
-      headers: { "User-Agent": UA, Cookie: inclassCookie() },
+    const res = await fetch(inclassViewUrl(ctx, articleId), {
+      headers: { "User-Agent": UA, Cookie: requireCookie(ctx) },
     });
     if (!res.ok) return null;
     const html = await res.text();

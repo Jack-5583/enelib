@@ -22,6 +22,7 @@ interface QuestionItem {
   id: string;
   kind: "naver" | "hohoon" | "inclass";
   labName: string;
+  boardName?: string | null;
   subject: string;
   title: string;
   body?: string;
@@ -280,11 +281,6 @@ function AddQuestionSheet({
     return <HohoonComposeForm labName={lab.name} subject={lab.subject} onBack={() => setLabId(null)} onClose={onClose} onSaved={onSaved} />;
   }
 
-  // inclass boards post through a shared session — a plain title/body form.
-  if (lab.kind === "inclass") {
-    return <InclassComposeForm labName={lab.name} subject={lab.subject} boardName={lab.boards[0]?.name ?? "수학 질문"} onBack={() => setLabId(null)} onClose={onClose} onSaved={onSaved} />;
-  }
-
   if (!boardId) {
     return (
       <Sheet open onClose={onClose} maxWidth={480}>
@@ -322,6 +318,23 @@ function AddQuestionSheet({
       setBoardId(null);
     }
   }
+  const boardName = lab.boards.find((b) => b.id === boardId)?.name || boardId;
+
+  // inclass boards post through a shared session — a plain title/body form.
+  if (lab.kind === "inclass") {
+    return (
+      <InclassComposeForm
+        labId={lab.id}
+        labName={lab.name}
+        subject={lab.subject}
+        boardId={boardId}
+        boardName={boardName}
+        onBack={backFromForm}
+        onClose={onClose}
+        onSaved={onSaved}
+      />
+    );
+  }
 
   return (
     <NaverQuestionForm
@@ -329,7 +342,7 @@ function AddQuestionSheet({
       labName={lab.name}
       subject={lab.subject}
       boardId={boardId}
-      boardName={lab.boards.find((b) => b.id === boardId)?.name || boardId}
+      boardName={boardName}
       onBack={backFromForm}
       onClose={onClose}
       onSaved={onSaved}
@@ -695,6 +708,7 @@ function HohoonDetailSheet({ item, onClose }: { item: QuestionItem; onClose: () 
     <Sheet open onClose={onClose} maxWidth={620}>
       <div className="mb-4 flex items-center gap-2">
         <Badge>{item.labName}</Badge>
+        {item.boardName && <span className="text-[12px] text-[#161616]/40">{item.boardName}</span>}
         <Badge>{item.subject}</Badge>
       </div>
       <h2 className="m-0 mb-4 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">{item.title}</h2>
@@ -741,15 +755,19 @@ function HohoonDetailSheet({ item, onClose }: { item: QuestionItem; onClose: () 
 }
 
 function InclassComposeForm({
+  labId,
   labName,
   subject,
+  boardId,
   boardName,
   onBack,
   onClose,
   onSaved,
 }: {
+  labId: string;
   labName: string;
   subject: string;
+  boardId: string;
   boardName: string;
   onBack: () => void;
   onClose: () => void;
@@ -775,6 +793,8 @@ function InclassComposeForm({
       }
       const fd = new FormData();
       fd.append("file", file);
+      fd.append("labId", labId);
+      fd.append("boardId", boardId);
       const res = await fetch("/api/inclass/upload", { method: "POST", body: fd });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.url) setAttachments((prev) => [...prev, d]);
@@ -794,7 +814,7 @@ function InclassComposeForm({
     const res = await fetch("/api/inclass/questions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subject: title.trim(), body: body.trim(), attachments }),
+      body: JSON.stringify({ labId, boardId, subject: title.trim(), body: body.trim(), attachments }),
     });
     setSubmitting(false);
     if (!res.ok) {
@@ -899,7 +919,7 @@ function InclassDetailSheet({ item, onClose }: { item: QuestionItem; onClose: ()
   }, []);
 
   async function del() {
-    if (!window.confirm("이 질문을 삭제할까요? (박종민수학연구소에 이미 올라간 글은 앱에서 삭제해도 사이트에는 그대로 남아있습니다.)")) return;
+    if (!window.confirm(`이 질문을 삭제할까요? (${item.labName}에 이미 올라간 글은 앱에서 삭제해도 사이트에는 그대로 남아있습니다.)`)) return;
     setDeleting(true);
     await fetch(`/api/inclass/questions/${item.id}`, { method: "DELETE" });
     setDeleting(false);
@@ -910,6 +930,7 @@ function InclassDetailSheet({ item, onClose }: { item: QuestionItem; onClose: ()
     <Sheet open onClose={onClose} maxWidth={620}>
       <div className="mb-4 flex items-center gap-2">
         <Badge>{item.labName}</Badge>
+        {item.boardName && <span className="text-[12px] text-[#161616]/40">{item.boardName}</span>}
         <Badge>{item.subject}</Badge>
       </div>
       <h2 className="m-0 mb-4 text-[22px] leading-8 font-normal text-[#161616] lg:text-[26px] lg:leading-[38px]">{item.title}</h2>

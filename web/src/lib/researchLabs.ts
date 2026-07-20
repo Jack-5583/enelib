@@ -2,6 +2,8 @@ export interface CafeBoard {
   id: string;
   name: string;
   menuid: string;
+  /** inclass only: the board path segment (e.g. "boardQnAS", "boardQnA2"). */
+  path?: string;
 }
 
 export interface ResearchLab {
@@ -11,9 +13,11 @@ export interface ResearchLab {
   subject: string;
   /** "naver" labs post to a Naver Cafe via the Open API; "hohoon" posts to
    * hohoonmath.com via its login/captcha flow; "inclass" posts to an inclass
-   * board (gomathtop.inclass.co.kr) via a shared cookie session. */
+   * board (e.g. gomathtop/tigerchan.inclass.co.kr) via a shared cookie session. */
   kind: "naver" | "hohoon" | "inclass";
   clubid?: string;
+  /** inclass only: the site origin, e.g. "https://tigerchan.inclass.co.kr". */
+  host?: string;
   homeUrl?: string;
   boards: CafeBoard[];
 }
@@ -89,8 +93,23 @@ export const RESEARCH_LABS: ResearchLab[] = [
     name: "박종민수학연구소",
     subject: "수학",
     kind: "inclass",
+    host: "https://gomathtop.inclass.co.kr",
     homeUrl: "https://gomathtop.inclass.co.kr/boardQnAS/list/?siteMenuIdx=137567",
-    boards: [{ id: "qna", name: "수학 질문", menuid: "137567" }],
+    boards: [{ id: "qna", name: "수학 질문", menuid: "137567", path: "boardQnAS" }],
+  },
+  {
+    id: "kimbeomchan",
+    name: "김범찬수학연구소",
+    subject: "수학",
+    kind: "inclass",
+    host: "https://tigerchan.inclass.co.kr",
+    homeUrl: "https://tigerchan.inclass.co.kr/boardQnAS/list/?siteMenuIdx=146091",
+    boards: [
+      { id: "internal", name: "[내부] Q&A", menuid: "146091", path: "boardQnAS" },
+      { id: "external", name: "[외부] Q&A", menuid: "146092", path: "boardQnA2" },
+      { id: "survival", name: "[서바이벌] Q&A", menuid: "146093", path: "boardQnA4" },
+      { id: "counsel", name: "[김범찬] 상담소", menuid: "146094", path: "boardQnA3" },
+    ],
   },
 ];
 
