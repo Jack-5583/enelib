@@ -412,18 +412,20 @@ export async function inclassFetchAnswer(ctx: InclassCtx, articleId: string): Pr
     if (!res.ok) return null;
     const html = await res.text();
 
-    const markers = [
-      /class=["'][^"']*(?:answer|reply|comment|re-?content)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|dd|section)>/i,
-      /답변[\s\S]{0,80}?<(?:div|dd|p)[^>]*>([\s\S]*?)<\/(?:div|dd|p)>/i,
-    ];
-    for (const re of markers) {
-      const m = re.exec(html);
-      if (m && m[1]) {
-        const text = htmlToText(m[1]);
-        if (text) return { text };
-      }
-    }
-    return null;
+    // The teacher's reply is server-rendered inside <div ... view-reply>; its
+    // body is the `content-area ck-content` block within (the question's own
+    // body is an earlier content-area, so we must scope to view-reply first).
+    // Reply content-area is followed by the attachment block, so anchor the
+    // close on `</div>` + that marker to survive nested <div>s in the answer.
+    const replyStart = html.search(/<div[^>]*\bview-reply\b[^>]*>/i);
+    if (replyStart < 0) return null;
+    const scope = html.slice(replyStart);
+    const m =
+      /ck-content\b[^>]*>([\s\S]*?)<\/div>\s*(?:<!--|<div[^>]*\bre-attachment)/i.exec(scope) ||
+      /ck-content\b[^>]*>([\s\S]*?)<\/div>/i.exec(scope);
+    if (!m) return null;
+    const text = htmlToText(m[1]);
+    return text ? { text } : null;
   } catch {
     return null;
   }
