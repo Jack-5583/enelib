@@ -56,6 +56,13 @@ export interface InclassCtx {
   cookie: string;
   boardPath: string;
   siteMenuIdx: string;
+  /** always set 제목 비공개 (isTitleSecret=Y) for this board. */
+  titleSecret: boolean;
+}
+
+export interface InclassCategory {
+  code: string;
+  label: string;
 }
 
 /** Build the request context (site host, board path, session cookie) for a
@@ -74,7 +81,31 @@ export function inclassContext(labId: string, boardId?: string): InclassCtx {
     cookie: (INCLASS_COOKIES[labId]?.() ?? "").trim(),
     boardPath: board.path ?? "boardQnAS",
     siteMenuIdx: board.menuid,
+    titleSecret: !!board.titleSecret,
   };
+}
+
+/** Read the 분류(groupCode) options from a board's write page. Returns [] for
+ * boards without a category dropdown. */
+export async function inclassFetchCategories(ctx: InclassCtx): Promise<InclassCategory[]> {
+  try {
+    const res = await fetch(`${ctx.host}/${ctx.boardPath}/write/`, {
+      headers: { "User-Agent": UA, Cookie: requireCookie(ctx), Referer: `${ctx.host}/${ctx.boardPath}/list/?siteMenuIdx=${ctx.siteMenuIdx}` },
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const sel = /<select[^>]*name=["']groupCode["'][\s\S]*?<\/select>/i.exec(html);
+    if (!sel) return [];
+    const out: InclassCategory[] = [];
+    for (const m of sel[0].matchAll(/<option[^>]*value=["']([^"']*)["'][^>]*>([\s\S]*?)<\/option>/gi)) {
+      const code = m[1].trim();
+      const label = htmlToText(m[2]);
+      if (code && label && !/선택/.test(label)) out.push({ code, label });
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }
 
 function requireCookie(ctx: InclassCtx): string {
@@ -114,6 +145,8 @@ interface PostQuestionParams {
   contentHtml: string;
   /** false → 공개 질문; true → 비공개 (default here). */
   secret?: boolean;
+  /** selected 분류 code, for boards that require one. */
+  groupCode?: string;
   attachments?: InclassAttachment[];
 }
 
@@ -170,11 +203,12 @@ export async function inclassPostQuestion(ctx: InclassCtx, params: PostQuestionP
   const fp = new URLSearchParams({
     tblBoardQNAIdx: "",
     isMode: "",
-    groupCode: "",
+    groupCode: params.groupCode ?? "",
     tblProductCode: "",
     titles: params.title,
     contents: params.contentHtml,
-    isTitleSecret: "N",
+    // Some boards require the title itself to be hidden too.
+    isTitleSecret: ctx.titleSecret ? "Y" : "N",
   });
   // Always 비공개 (작성자만 열람).
   fp.set("isOpen", "N");

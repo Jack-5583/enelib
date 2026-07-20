@@ -4,6 +4,8 @@ export interface CafeBoard {
   menuid: string;
   /** inclass only: the board path segment (e.g. "boardQnAS", "boardQnA2"). */
   path?: string;
+  /** inclass only: always post with 제목 비공개 (isTitleSecret=Y). */
+  titleSecret?: boolean;
 }
 
 export interface ResearchLab {
@@ -107,8 +109,8 @@ export const RESEARCH_LABS: ResearchLab[] = [
     boards: [
       { id: "internal", name: "[내부] Q&A", menuid: "146091", path: "boardQnAS" },
       { id: "external", name: "[외부] Q&A", menuid: "146092", path: "boardQnA2" },
-      { id: "survival", name: "[서바이벌] Q&A", menuid: "146093", path: "boardQnA4" },
-      { id: "counsel", name: "[김범찬] 상담소", menuid: "146094", path: "boardQnA3" },
+      { id: "survival", name: "[서바이벌] Q&A", menuid: "146093", path: "boardQnA4", titleSecret: true },
+      { id: "counsel", name: "[김범찬] 상담소", menuid: "146094", path: "boardQnA3", titleSecret: true },
     ],
   },
 ];

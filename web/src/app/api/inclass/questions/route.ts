@@ -24,6 +24,7 @@ const createSchema = z.object({
   subject: z.string().trim().min(1, "제목을 입력해주세요.").max(200), // question title
   body: z.string().trim().min(1, "내용을 입력해주세요."),
   secret: z.boolean().optional(),
+  groupCode: z.string().max(60).optional(),
   attachments: z.array(attachmentSchema).max(3).optional(),
 });
 
@@ -81,7 +82,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "잘못된 요청입니다." }, { status: 400 });
   }
-  const { labId, boardId, subject, body, secret, attachments } = parsed.data;
+  const { labId, boardId, subject, body, secret, groupCode, attachments } = parsed.data;
 
   if (!getResearchLabBoard(labId, boardId)) {
     return NextResponse.json({ error: "잘못된 연구소/게시판입니다." }, { status: 400 });
@@ -90,7 +91,7 @@ export async function POST(req: Request) {
   let ctx;
   try {
     ctx = inclassContext(labId, boardId);
-    await inclassPostQuestion(ctx, { title: subject, contentHtml: buildInclassContentHtml(body), secret, attachments });
+    await inclassPostQuestion(ctx, { title: subject, contentHtml: buildInclassContentHtml(body), secret, groupCode, attachments });
   } catch (err) {
     const message = err instanceof InclassError ? err.message : "질문 등록에 실패했습니다.";
     return NextResponse.json({ error: message }, { status: 502 });

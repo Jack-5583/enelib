@@ -779,6 +779,21 @@ function InclassComposeForm({
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [categories, setCategories] = useState<{ code: string; label: string }[]>([]);
+  const [groupCode, setGroupCode] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/inclass/categories?labId=${encodeURIComponent(labId)}&boardId=${encodeURIComponent(boardId)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (active && Array.isArray(d.categories)) setCategories(d.categories);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [labId, boardId]);
 
   async function onPickPhotos(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
@@ -809,12 +824,16 @@ function InclassComposeForm({
 
   async function submit() {
     if (!title.trim() || !body.trim() || submitting || uploading) return;
+    if (categories.length > 0 && !groupCode) {
+      setError("분류를 선택해주세요.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     const res = await fetch("/api/inclass/questions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ labId, boardId, subject: title.trim(), body: body.trim(), attachments }),
+      body: JSON.stringify({ labId, boardId, subject: title.trim(), body: body.trim(), groupCode, attachments }),
     });
     setSubmitting(false);
     if (!res.ok) {
@@ -831,6 +850,24 @@ function InclassComposeForm({
       <p className="m-0 mb-6 text-[14px] leading-6 text-[#161616]/50 lg:text-[16px]">
         <span className="font-semibold text-[#161616]">{labName}</span> · {boardName} · {subject}
       </p>
+
+      {categories.length > 0 && (
+        <>
+          <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">분류</p>
+          <select
+            value={groupCode}
+            onChange={(e) => setGroupCode(e.target.value)}
+            className="mb-5 w-full border border-[#16161614] bg-transparent px-3 py-2.5 text-[15px] text-[#161616] outline-none"
+          >
+            <option value="">분류를 선택해주세요.</option>
+            {categories.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
 
       <p className="m-0 mb-2 text-[13px] leading-5 font-semibold text-[#161616]">제목</p>
       <input
