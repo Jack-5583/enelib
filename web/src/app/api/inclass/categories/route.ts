@@ -11,8 +11,14 @@ export async function GET(req: NextRequest) {
 
   const labId = req.nextUrl.searchParams.get("labId") ?? "";
   const boardId = req.nextUrl.searchParams.get("boardId") ?? "";
-  if (!getResearchLabBoard(labId, boardId)) return NextResponse.json({ categories: [] });
+  const found = getResearchLabBoard(labId, boardId);
+  if (!found) return NextResponse.json({ categories: [] });
 
+  // Boards whose 분류 options are JS-loaded carry them statically in config;
+  // otherwise read them live from the write page.
+  if (found.board.categories?.length) {
+    return NextResponse.json({ categories: found.board.categories });
+  }
   try {
     const ctx = inclassContext(labId, boardId);
     const categories = await inclassFetchCategories(ctx);

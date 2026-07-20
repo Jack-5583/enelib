@@ -6,6 +6,9 @@ export interface CafeBoard {
   path?: string;
   /** inclass only: always post with 제목 비공개 (isTitleSecret=Y). */
   titleSecret?: boolean;
+  /** inclass only: 분류(groupCode) options, when the board requires one and the
+   * options are JS-loaded (so they can't be read from the write page). */
+  categories?: { code: string; label: string }[];
 }
 
 export interface ResearchLab {
@@ -110,10 +113,35 @@ export const RESEARCH_LABS: ResearchLab[] = [
     host: "https://tigerchan.inclass.co.kr",
     homeUrl: "https://tigerchan.inclass.co.kr/boardQnAS/list/?siteMenuIdx=146091",
     boards: [
-      { id: "internal", name: "[내부] Q&A", menuid: "146091", path: "boardQnAS" },
+      {
+        id: "internal",
+        name: "[내부] Q&A",
+        menuid: "146091",
+        path: "boardQnAS",
+        categories: [
+          { code: "tigerchan_2", label: "로그인" },
+          { code: "tigerchan_3", label: "딥앤로그" },
+          { code: "tigerchan_4", label: "에필로그" },
+          { code: "tigerchan_5", label: "킬러 모의고사" },
+          { code: "tigerchan_6", label: "김범찬 모의고사" },
+          { code: "tigerchan_7", label: "아날로그" },
+        ],
+      },
       { id: "external", name: "[외부] Q&A", menuid: "146092", path: "boardQnA2" },
       { id: "survival", name: "[서바이벌] Q&A", menuid: "146093", path: "boardQnA4", titleSecret: true },
-      { id: "counsel", name: "[김범찬] 상담소", menuid: "146094", path: "boardQnA3", titleSecret: true },
+      {
+        id: "counsel",
+        name: "[김범찬] 상담소",
+        menuid: "146094",
+        path: "boardQnA3",
+        titleSecret: true,
+        categories: [
+          { code: "tigerchan_5", label: "학습상담" },
+          { code: "tigerchan_6", label: "멘탈관리" },
+          { code: "tigerchan_8", label: "행정 및 인클래스" },
+          { code: "tigerchan_9", label: "기타" },
+        ],
+      },
     ],
   },
 ];
