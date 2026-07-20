@@ -69,6 +69,11 @@ export function Camstudy() {
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const captureRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastCaptureRef = useRef<Date | null>(null);
+  const [pipActive, setPipActive] = useState(false);
+  const runningRef = useRef(false);
+  const pipVideoRef = useRef<HTMLVideoElement | null>(null);
+  const pipCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const pipDrawRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     fetch("/api/todos?range=today")
@@ -83,7 +88,11 @@ export function Camstudy() {
     () => () => {
       if (tickRef.current) clearInterval(tickRef.current);
       if (captureRef.current) clearInterval(captureRef.current);
+      if (pipDrawRef.current) clearInterval(pipDrawRef.current);
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      if (typeof document !== "undefined" && document.pictureInPictureElement) {
+        document.exitPictureInPicture().catch(() => {});
+      }
     },
     []
   );
@@ -148,6 +157,114 @@ export function Camstudy() {
     }
   }
 
+  // Picture-in-Picture: composite the live camera + the running timer onto a
+  // canvas, stream that into a hidden <video>, and float it as a PiP window so
+  // the clock and camera stay visible after the user switches tabs/apps.
+  function drawPipFrame() {
+    const canvas = pipCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = "#161616";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const video = videoRef.current;
+    if (video && video.videoWidth) {
+      const cw = canvas.width;
+      const ch = canvas.height;
+      const vr = video.videoWidth / video.videoHeight;
+      let dw = cw;
+      let dh = ch;
+      if (vr > cw / ch) {
+        dh = ch;
+        dw = ch * vr;
+      } else {
+        dw = cw;
+        dh = cw / vr;
+      }
+      ctx.drawImage(video, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+    }
+    // Timer bar
+    const barH = Math.round(canvas.height * 0.2);
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(0, canvas.height - barH, canvas.width, barH);
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `600 ${Math.round(barH * 0.5)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    ctx.fillText(fmtTime(secondsRef.current), canvas.width / 2, canvas.height - barH / 2);
+  }
+
+  async function enterPip() {
+    const video = videoRef.current;
+    if (typeof document === "undefined" || !document.pictureInPictureEnabled) return;
+    if (!video || !video.videoWidth || document.pictureInPictureElement) return;
+    const canvas = pipCanvasRef.current ?? document.createElement("canvas");
+    pipCanvasRef.current = canvas;
+    canvas.width = 480;
+    canvas.height = 360;
+    drawPipFrame();
+    if (pipDrawRef.current) clearInterval(pipDrawRef.current);
+    // 500ms when visible; browsers clamp to ~1s while hidden — fine for a clock.
+    pipDrawRef.current = setInterval(drawPipFrame, 500);
+    const pv = pipVideoRef.current;
+    if (!pv) return;
+    if (!pv.srcObject) pv.srcObject = canvas.captureStream(10);
+    await pv.play().catch(() => {});
+    try {
+      await pv.requestPictureInPicture();
+      setPipActive(true);
+    } catch {
+      // Blocked (e.g. no user gesture) — stop the draw loop we started.
+      if (pipDrawRef.current) {
+        clearInterval(pipDrawRef.current);
+        pipDrawRef.current = null;
+      }
+    }
+  }
+
+  async function exitPip() {
+    try {
+      if (document.pictureInPictureElement) await document.exitPictureInPicture();
+    } catch {
+      /* ignore */
+    }
+    if (pipDrawRef.current) {
+      clearInterval(pipDrawRef.current);
+      pipDrawRef.current = null;
+    }
+    setPipActive(false);
+  }
+
+  // Reflect the browser's own PiP close button back into our state.
+  useEffect(() => {
+    const pv = pipVideoRef.current;
+    if (!pv) return;
+    const onLeave = () => {
+      if (pipDrawRef.current) {
+        clearInterval(pipDrawRef.current);
+        pipDrawRef.current = null;
+      }
+      setPipActive(false);
+    };
+    pv.addEventListener("leavepictureinpicture", onLeave);
+    return () => pv.removeEventListener("leavepictureinpicture", onLeave);
+  }, []);
+
+  // Best-effort: pop PiP when the page is hidden during a session (some
+  // browsers require a prior click — the PiP button covers those).
+  useEffect(() => {
+    const onVis = () => {
+      if (document.hidden) {
+        if (runningRef.current) enterPip();
+      } else {
+        exitPip();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function capture(sessionId: string) {
     const video = videoRef.current;
     if (!video || !video.videoWidth) return;
@@ -203,6 +320,7 @@ export function Camstudy() {
     secondsRef.current = 0;
     setSeconds(0);
     setRunning(true);
+    runningRef.current = true;
     tickRef.current = setInterval(() => {
       secondsRef.current += 1;
       setSeconds(secondsRef.current);
@@ -217,6 +335,8 @@ export function Camstudy() {
     if (captureRef.current) clearInterval(captureRef.current);
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    runningRef.current = false;
+    await exitPip();
     setRunning(false);
     setPreviewOn(false);
     if (sessionIdRef.current) {
@@ -253,6 +373,16 @@ export function Camstudy() {
                 <span className="text-[13px] font-medium text-white">REC</span>
               </div>
             )}
+            {running && (
+              <button
+                onClick={() => (pipActive ? exitPip() : enterPip())}
+                className="absolute top-3.5 right-3.5 rounded-[2px] bg-[#161616]/80 px-2.5 py-1 text-[13px] font-medium text-white"
+              >
+                {pipActive ? "PiP 끄기" : "PiP"}
+              </button>
+            )}
+            {/* Hidden sink for the composited camera+timer PiP stream. */}
+            <video ref={pipVideoRef} muted playsInline className="hidden" />
             {previewOn && !running && (
               <div className="absolute top-3.5 left-3.5 rounded-[2px] bg-[#161616]/80 px-2.5 py-1 text-[13px] font-medium text-white">미리보기</div>
             )}

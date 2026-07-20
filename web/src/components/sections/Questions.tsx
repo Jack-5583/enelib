@@ -5,6 +5,48 @@ import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Sheet } from "@/components/ui/Sheet";
 
+/** A thumbnail that opens a full-screen zoom overlay when clicked. */
+function Zoomable({ src, className }: { src: string; className?: string }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="" className={className} style={{ cursor: "zoom-in" }} onClick={() => setOpen(true)} />
+      {open && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 p-4"
+          style={{ cursor: "zoom-out" }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt=""
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[92vh] max-w-[92vw] rounded-[2px] object-contain"
+            style={{ cursor: "default" }}
+          />
+          <button
+            onClick={() => setOpen(false)}
+            aria-label="닫기"
+            className="absolute top-4 right-4 flex h-9 w-9 items-center justify-center rounded-full border-none bg-white/15 text-[18px] text-white"
+          >
+            ×
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
 interface BoardOption {
   id: string;
   name: string;
@@ -716,8 +758,7 @@ function HohoonDetailSheet({ item, onClose }: { item: QuestionItem; onClose: () 
       {item.imagePaths && item.imagePaths.length > 0 && (
         <div className="mb-5 flex flex-wrap gap-2">
           {item.imagePaths.map((url, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={url} alt="" className="h-28 w-28 rounded-[2px] border border-[#16161614] object-cover" />
+            <Zoomable key={i} src={url} className="h-28 w-28 rounded-[2px] border border-[#16161614] object-cover" />
           ))}
         </div>
       )}
@@ -975,8 +1016,7 @@ function InclassDetailSheet({ item, onClose }: { item: QuestionItem; onClose: ()
       {item.imagePaths && item.imagePaths.length > 0 && (
         <div className="mb-5 flex flex-wrap gap-2">
           {item.imagePaths.map((url, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={url} alt="" className="h-28 w-28 rounded-[2px] border border-[#16161614] object-cover" />
+            <Zoomable key={i} src={url} className="h-28 w-28 rounded-[2px] border border-[#16161614] object-cover" />
           ))}
         </div>
       )}
@@ -1079,8 +1119,7 @@ function QuestionDetailSheet({ id, onClose }: { id: string; onClose: () => void 
       {detail.photoUrls.length > 0 && (
         <div className="mb-5 flex flex-wrap gap-2">
           {detail.photoUrls.map((url, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={url} alt="" className="h-28 w-28 rounded-[2px] border border-[#16161614] object-cover" />
+            <Zoomable key={i} src={url} className="h-28 w-28 rounded-[2px] border border-[#16161614] object-cover" />
           ))}
         </div>
       )}
