@@ -55,6 +55,9 @@ export function Camstudy() {
   const [seconds, setSeconds] = useState(0);
   const [interval, setIntervalMin] = useState(10);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [deviceId, setDeviceId] = useState<string>("");
+  const [previewOn, setPreviewOn] = useState(false);
   const [todos, setTodos] = useState<TodoOption[]>([]);
   const [currentTodoId, setCurrentTodoId] = useState("");
   const [todaySummary, setTodaySummary] = useState({ sessionsToday: 0, totalSeconds: 0 });
@@ -84,6 +87,66 @@ export function Camstudy() {
     },
     []
   );
+
+  // List available webcams (labels appear only after camera permission is
+  // granted) and keep the list fresh as devices are plugged/unplugged.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) return;
+    const refresh = () => {
+      navigator.mediaDevices
+        .enumerateDevices()
+        .then((list) => setVideoDevices(list.filter((d) => d.kind === "videoinput")))
+        .catch(() => {});
+    };
+    refresh();
+    navigator.mediaDevices.addEventListener?.("devicechange", refresh);
+    return () => navigator.mediaDevices.removeEventListener?.("devicechange", refresh);
+  }, []);
+
+  function videoConstraints(id: string): MediaStreamConstraints {
+    return { video: id ? { deviceId: { exact: id } } : true, audio: false };
+  }
+
+  // Open the given camera into the preview <video>, stopping any current stream.
+  // Refreshes the device list (labels become available once permission is given)
+  // and syncs the selected id to the camera that actually opened.
+  async function acquireStream(id: string): Promise<MediaStream> {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    const stream = await navigator.mediaDevices.getUserMedia(videoConstraints(id));
+    streamRef.current = stream;
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play().catch(() => {});
+    }
+    const actualId = stream.getVideoTracks()[0]?.getSettings().deviceId;
+    if (actualId) setDeviceId(actualId);
+    navigator.mediaDevices
+      .enumerateDevices()
+      .then((list) => setVideoDevices(list.filter((d) => d.kind === "videoinput")))
+      .catch(() => {});
+    return stream;
+  }
+
+  async function startPreview() {
+    setCameraError(null);
+    try {
+      await acquireStream(deviceId);
+      setPreviewOn(true);
+    } catch {
+      setCameraError("웹캠에 접근할 수 없어요. 브라우저 권한을 확인해 주세요.");
+    }
+  }
+
+  async function changeDevice(id: string) {
+    setDeviceId(id);
+    if (!running && !previewOn) return;
+    setCameraError(null);
+    try {
+      await acquireStream(id);
+    } catch {
+      setCameraError("선택한 웹캠을 켤 수 없어요. 다른 카메라를 선택해 주세요.");
+    }
+  }
 
   async function capture(sessionId: string) {
     const video = videoRef.current;
@@ -115,16 +178,18 @@ export function Camstudy() {
   async function start() {
     setCameraError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+      // Reuse the live preview stream when it's already the selected camera;
+      // otherwise open the selected camera now.
+      const current = streamRef.current?.getVideoTracks()[0];
+      const currentId = current?.getSettings().deviceId;
+      if (!streamRef.current || (deviceId && currentId !== deviceId)) {
+        await acquireStream(deviceId);
       }
     } catch {
       setCameraError("웹캠에 접근할 수 없어요. 브라우저 권한을 확인해 주세요.");
       return;
     }
+    setPreviewOn(false);
 
     const res = await fetch("/api/camstudy/session", {
       method: "POST",
@@ -153,6 +218,7 @@ export function Camstudy() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setRunning(false);
+    setPreviewOn(false);
     if (sessionIdRef.current) {
       await fetch(`/api/camstudy/session/${sessionIdRef.current}`, {
         method: "PATCH",
@@ -180,14 +246,17 @@ export function Camstudy() {
       {tab === "live" ? (
         <div>
           <div className="relative mt-7 flex aspect-video w-full items-center justify-center overflow-hidden border border-[#16161614] bg-[repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4_10px,#efefef_10px,#efefef_20px)]">
-            <video ref={videoRef} muted playsInline className="absolute inset-0 h-full w-full object-cover" style={{ display: running ? "block" : "none" }} />
+            <video ref={videoRef} muted playsInline className="absolute inset-0 h-full w-full object-cover" style={{ display: running || previewOn ? "block" : "none" }} />
             {running && (
               <div className="absolute top-3.5 left-3.5 flex items-center gap-1.5 rounded-[2px] bg-[#161616] px-2.5 py-1">
                 <span className="h-2 w-2 rounded-full bg-white" />
                 <span className="text-[13px] font-medium text-white">REC</span>
               </div>
             )}
-            {!running && <span className="font-mono text-[13px] text-[#161616]/40">웹캠 미리보기</span>}
+            {previewOn && !running && (
+              <div className="absolute top-3.5 left-3.5 rounded-[2px] bg-[#161616]/80 px-2.5 py-1 text-[13px] font-medium text-white">미리보기</div>
+            )}
+            {!running && !previewOn && <span className="font-mono text-[13px] text-[#161616]/40">웹캠 미리보기</span>}
             <p className="absolute right-0 bottom-4 left-0 m-0 text-center font-mono text-[32px] font-light tracking-[0.04em] text-[#161616] lg:text-[44px]">
               {fmtTime(seconds)}
             </p>
@@ -197,6 +266,37 @@ export function Camstudy() {
           <p className="m-0 py-3.5 text-center text-[13px] leading-5 text-[#161616]/50 lg:text-[14px] lg:leading-6">
             {running ? `녹화 중 · ${interval}분마다 자동 촬영` : "웹캠을 선택하고 학습을 시작하세요"}
           </p>
+
+          {!running && (
+            <div className="mb-5">
+              <p className="m-0 mb-2.5 text-[14px] leading-6 font-semibold text-[#161616]">웹캠 선택</p>
+              <div className="flex gap-2">
+                <select
+                  value={deviceId}
+                  onChange={(e) => changeDevice(e.target.value)}
+                  className="min-w-0 flex-1 border border-[#16161614] bg-transparent px-3 py-2.5 text-[15px] text-[#161616] outline-none"
+                >
+                  {videoDevices.length === 0 && <option value="">기본 웹캠</option>}
+                  {videoDevices.map((d, i) => (
+                    <option key={d.deviceId || i} value={d.deviceId}>
+                      {d.label || `카메라 ${i + 1}`}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={startPreview}
+                  className="flex-none rounded-[2px] border border-[#161616] bg-white px-4 py-2.5 text-[14px] font-medium text-[#161616]"
+                >
+                  {previewOn ? "다시 켜기" : "미리보기"}
+                </button>
+              </div>
+              {videoDevices.every((d) => !d.label) && (
+                <p className="m-0 mt-2 text-[12px] leading-5 text-[#161616]/45">
+                  카메라 이름이 안 보이면 <span className="font-medium text-[#161616]/70">미리보기</span>를 눌러 권한을 허용해 주세요.
+                </p>
+              )}
+            </div>
+          )}
 
           {!running && todos.length > 0 && (
             <div className="mb-5">
