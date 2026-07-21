@@ -1,19 +1,101 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Sheet } from "@/components/ui/Sheet";
 
-/** A thumbnail that opens a full-screen zoom overlay when clicked. */
+/** A thumbnail that opens a full-screen zoom overlay when clicked. Inside the
+ * overlay the image can be zoomed (pinch, double-tap, wheel) and panned. */
 function Zoomable({ src, className }: { src: string; className?: string }) {
   const [open, setOpen] = useState(false);
+  const [t, setT] = useState({ scale: 1, tx: 0, ty: 0 });
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchDist = useRef(0);
+  const moved = useRef(false);
+
+  const reset = () => setT({ scale: 1, tx: 0, ty: 0 });
+  const close = () => {
+    setOpen(false);
+    reset();
+  };
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    // Lock background scroll while the lightbox is open.
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+  // Zoom by `factor` while keeping the point (cx,cy) fixed on screen. The image
+  // uses transform-origin 0 0, so we adjust the translation to compensate.
+  const zoomAt = (factor: number, cx: number, cy: number) => {
+    setT((prev) => {
+      const ns = clamp(prev.scale * factor, 1, 6);
+      if (ns === prev.scale) return prev;
+      if (ns === 1) return { scale: 1, tx: 0, ty: 0 };
+      const rect = imgRef.current?.getBoundingClientRect();
+      if (!rect) return prev;
+      const k = 1 - ns / prev.scale;
+      return { scale: ns, tx: prev.tx + (cx - rect.left) * k, ty: prev.ty + (cy - rect.top) * k };
+    });
+  };
+
+  const onWheel = (e: React.WheelEvent) => {
+    zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX, e.clientY);
+  };
+
+  const onDoubleClick = (e: React.MouseEvent) => {
+    if (t.scale > 1) reset();
+    else zoomAt(2.5, e.clientX, e.clientY);
+  };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    moved.current = false;
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      pinchDist.current = Math.hypot(a.x - b.x, a.y - b.y);
+    }
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    const p = pointers.current.get(e.pointerId);
+    if (!p) return;
+    const prevX = p.x;
+    const prevY = p.y;
+    p.x = e.clientX;
+    p.y = e.clientY;
+    if (pointers.current.size >= 2) {
+      const [a, b] = [...pointers.current.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinchDist.current > 0) zoomAt(dist / pinchDist.current, (a.x + b.x) / 2, (a.y + b.y) / 2);
+      pinchDist.current = dist;
+      moved.current = true;
+    } else if (t.scale > 1) {
+      const dx = e.clientX - prevX;
+      const dy = e.clientY - prevY;
+      if (Math.abs(dx) + Math.abs(dy) > 2) moved.current = true;
+      setT((prev) => ({ ...prev, tx: prev.tx + dx, ty: prev.ty + dy }));
+    }
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size < 2) pinchDist.current = 0;
+  };
+
   return (
     <>
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -22,22 +104,37 @@ function Zoomable({ src, className }: { src: string; className?: string }) {
         <div
           role="dialog"
           aria-modal="true"
-          onClick={() => setOpen(false)}
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 p-4"
-          style={{ cursor: "zoom-out" }}
+          onClick={() => {
+            if (!moved.current) close();
+          }}
+          className="fixed inset-0 z-[200] flex items-center justify-center overflow-hidden bg-black/85"
+          style={{ touchAction: "none" }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            ref={imgRef}
             src={src}
             alt=""
+            draggable={false}
             onClick={(e) => e.stopPropagation()}
-            className="max-h-[92vh] max-w-[92vw] rounded-[2px] object-contain"
-            style={{ cursor: "default" }}
+            onWheel={onWheel}
+            onDoubleClick={onDoubleClick}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            className="max-h-[92vh] max-w-[92vw] rounded-[2px] object-contain select-none"
+            style={{
+              transform: `translate(${t.tx}px, ${t.ty}px) scale(${t.scale})`,
+              transformOrigin: "0 0",
+              touchAction: "none",
+              cursor: t.scale > 1 ? "grab" : "zoom-in",
+            }}
           />
           <button
-            onClick={() => setOpen(false)}
+            onClick={close}
             aria-label="닫기"
-            className="absolute top-4 right-4 flex h-9 w-9 items-center justify-center rounded-full border-none bg-white/15 text-[18px] text-white"
+            className="absolute top-4 right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border-none bg-white/15 text-[18px] text-white"
           >
             ×
           </button>
