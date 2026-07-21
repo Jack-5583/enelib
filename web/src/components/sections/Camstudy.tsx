@@ -6,7 +6,14 @@ import { Badge } from "@/components/ui/Badge";
 import { Sheet } from "@/components/ui/Sheet";
 import { HandwritingCanvas, type HandwritingCanvasHandle } from "@/components/camstudy/HandwritingCanvas";
 
-const INTERVALS = [5, 10, 15, 30];
+// Timelapse capture cadence options, in seconds.
+const CAPTURE_SECONDS = [10, 20, 30, 60];
+// Flush buffered frames to the server every N captures (crash-safety vs. chatter).
+const FLUSH_EVERY = 6;
+// Cap frames per session so one row's stored data URLs stay bounded (~600×~10KB).
+const MAX_FRAMES = 600;
+// Mean luminance (0–255) below which a frame is treated as black and skipped.
+const BLACK_THRESHOLD = 12;
 const PEN_COLORS = [
   { c: "#e0362f", label: "빨강" },
   { c: "#161616", label: "검정" },
@@ -53,7 +60,7 @@ export function Camstudy() {
   const [tab, setTab] = useState<"live" | "timeline">("live");
   const [running, setRunning] = useState(false);
   const [seconds, setSeconds] = useState(0);
-  const [interval, setIntervalMin] = useState(10);
+  const [captureSec, setCaptureSec] = useState(20);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState<string>("");
@@ -68,7 +75,12 @@ export function Camstudy() {
   const secondsRef = useRef(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const captureRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastCaptureRef = useRef<Date | null>(null);
+  // Timelapse: one timeline entry per session, frames buffered then flushed.
+  const timelineEntryIdRef = useRef<string | null>(null);
+  const frameBufferRef = useRef<string[]>([]);
+  const frameCountRef = useRef(0);
+  const sessionStartRef = useRef<Date | null>(null);
+  const flushingRef = useRef(false);
   const [pipActive, setPipActive] = useState(false);
   const [pipNote, setPipNote] = useState<string | null>(null);
   const runningRef = useRef(false);
@@ -357,31 +369,88 @@ export function Camstudy() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function capture(sessionId: string) {
+  function durLabel(ms: number): string {
+    const mins = Math.round(ms / 60000);
+    if (mins <= 0) return "1분 미만";
+    if (mins < 60) return `${mins}분`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m ? `${h}시간 ${m}분` : `${h}시간`;
+  }
+
+  // Grab one small timelapse frame, skipping frames that are unreliable
+  // (camera not ready, app backgrounded) or effectively black.
+  function captureFrame() {
+    if (frameCountRef.current >= MAX_FRAMES) return;
+    if (typeof document !== "undefined" && document.hidden) return;
     const video = videoRef.current;
-    if (!video || !video.videoWidth) return;
+    if (!video || video.readyState < 2 || !video.videoWidth) return;
+
+    const w = 320;
+    const h = Math.max(1, Math.round((video.videoHeight / video.videoWidth) * w));
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = w;
+    canvas.height = h;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.drawImage(video, 0, 0);
-    const photoUrl = canvas.toDataURL("image/jpeg", 0.7);
-    const segmentStart = lastCaptureRef.current || new Date(Date.now() - interval * 60000);
-    lastCaptureRef.current = new Date();
-    const todo = todos.find((t) => t.id === currentTodoId);
-    await fetch("/api/camstudy/timeline", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        camSessionId: sessionId,
-        subject: todo?.subject,
-        todoTitle: todo?.title,
-        durationLabel: `${interval}분`,
-        photoUrls: [photoUrl],
-        segmentStart: segmentStart.toISOString(),
-      }),
-    });
+    ctx.drawImage(video, 0, 0, w, h);
+
+    // Skip black frames (covered camera / not yet delivering video).
+    try {
+      const data = ctx.getImageData(0, 0, w, h).data;
+      let sum = 0;
+      let n = 0;
+      for (let i = 0; i < data.length; i += 4 * 40) {
+        sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        n++;
+      }
+      if (n && sum / n < BLACK_THRESHOLD) return;
+    } catch {
+      /* getUserMedia canvas isn't tainted; ignore */
+    }
+
+    frameBufferRef.current.push(canvas.toDataURL("image/jpeg", 0.5));
+    frameCountRef.current += 1;
+    if (frameBufferRef.current.length >= FLUSH_EVERY) flushFrames();
+  }
+
+  // Persist buffered frames: create the session's timeline entry on the first
+  // batch, then append to it. On failure, re-buffer for the next attempt.
+  async function flushFrames() {
+    if (flushingRef.current || !sessionIdRef.current || frameBufferRef.current.length === 0) return;
+    flushingRef.current = true;
+    const frames = frameBufferRef.current;
+    frameBufferRef.current = [];
+    try {
+      if (!timelineEntryIdRef.current) {
+        const todo = todos.find((t) => t.id === currentTodoId);
+        const res = await fetch("/api/camstudy/timeline", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            camSessionId: sessionIdRef.current,
+            subject: todo?.subject,
+            todoTitle: todo?.title,
+            photoUrls: frames,
+            segmentStart: (sessionStartRef.current ?? new Date()).toISOString(),
+            segmentEnd: new Date().toISOString(),
+          }),
+        });
+        const d = await res.json().catch(() => null);
+        if (d?.id) timelineEntryIdRef.current = d.id;
+        else frameBufferRef.current = frames.concat(frameBufferRef.current);
+      } else {
+        await fetch(`/api/camstudy/timeline/${timelineEntryIdRef.current}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ appendPhotoUrls: frames, endedAt: new Date().toISOString() }),
+        });
+      }
+    } catch {
+      frameBufferRef.current = frames.concat(frameBufferRef.current);
+    } finally {
+      flushingRef.current = false;
+    }
   }
 
   async function start() {
@@ -403,11 +472,16 @@ export function Camstudy() {
     const res = await fetch("/api/camstudy/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ intervalMinutes: interval }),
+      body: JSON.stringify({ intervalMinutes: Math.max(1, Math.round(captureSec / 60)) }),
     });
     const data = await res.json();
     sessionIdRef.current = data.id;
-    lastCaptureRef.current = new Date();
+
+    // Fresh timelapse buffers for this session.
+    sessionStartRef.current = new Date();
+    timelineEntryIdRef.current = null;
+    frameBufferRef.current = [];
+    frameCountRef.current = 0;
 
     secondsRef.current = 0;
     setSeconds(0);
@@ -418,17 +492,33 @@ export function Camstudy() {
       secondsRef.current += 1;
       setSeconds(secondsRef.current);
     }, 1000);
-    captureRef.current = setInterval(() => {
-      if (sessionIdRef.current) capture(sessionIdRef.current);
-    }, interval * 60000);
+    // Grab an early frame (after camera warmup), then keep the timelapse rolling.
+    setTimeout(captureFrame, 1500);
+    captureRef.current = setInterval(captureFrame, captureSec * 1000);
   }
 
   async function stop() {
     if (tickRef.current) clearInterval(tickRef.current);
     if (captureRef.current) clearInterval(captureRef.current);
+    runningRef.current = false;
+
+    // Capture a final frame and flush everything still buffered.
+    captureFrame();
+    await flushFrames();
+    if (timelineEntryIdRef.current && sessionStartRef.current) {
+      await fetch(`/api/camstudy/timeline/${timelineEntryIdRef.current}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endedAt: new Date().toISOString(),
+          durationLabel: durLabel(Date.now() - sessionStartRef.current.getTime()),
+        }),
+      }).catch(() => {});
+    }
+    timelineEntryIdRef.current = null;
+
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
-    runningRef.current = false;
     await exitPip();
     releaseWakeLock();
     setPipNote(null);
@@ -502,7 +592,7 @@ export function Camstudy() {
             </div>
           )}
           <p className="m-0 py-3.5 text-center text-[13px] leading-5 text-[#161616]/50 lg:text-[14px] lg:leading-6">
-            {running ? `녹화 중 · ${interval}분마다 자동 촬영` : "웹캠을 선택하고 학습을 시작하세요"}
+            {running ? `타임랩스 기록 중 · ${captureSec}초마다 촬영` : "웹캠을 선택하고 학습을 시작하세요"}
           </p>
 
           {!running && (
@@ -554,18 +644,18 @@ export function Camstudy() {
             </div>
           )}
 
-          <p className="m-0 mb-2.5 text-[14px] leading-6 font-semibold text-[#161616]">자동 촬영 간격</p>
+          <p className="m-0 mb-2.5 text-[14px] leading-6 font-semibold text-[#161616]">타임랩스 촬영 간격</p>
           <div className="mb-5 flex w-full">
-            {INTERVALS.map((n, i) => (
+            {CAPTURE_SECONDS.map((n, i) => (
               <button
                 key={n}
                 disabled={running}
-                onClick={() => setIntervalMin(n)}
+                onClick={() => setCaptureSec(n)}
                 className={`flex-1 border border-[#16161614] py-2.5 text-center text-[13px] lg:text-[14px] ${i !== 0 ? "-ml-px" : ""} ${
-                  interval === n ? "bg-[#161616] text-white" : "bg-white text-[#161616]/50"
+                  captureSec === n ? "bg-[#161616] text-white" : "bg-white text-[#161616]/50"
                 }`}
               >
-                {n}분
+                {n}초
               </button>
             ))}
           </div>
@@ -593,6 +683,43 @@ export function Camstudy() {
         <TimelineView todos={todos} />
       )}
     </div>
+  );
+}
+
+// Plays a session's captured frames as a timelapse; tap to play/pause + scrub.
+function Timelapse({ frames }: { frames: string[] }) {
+  const [i, setI] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    if (!playing || frames.length < 2) return;
+    const t = setInterval(() => setI((x) => (x + 1) % frames.length), 120);
+    return () => clearInterval(t);
+  }, [playing, frames.length]);
+  const idx = Math.min(i, frames.length - 1);
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={frames[idx]} alt="타임랩스" className="absolute inset-0 h-full w-full object-cover" />
+      <button
+        onClick={() => setPlaying((p) => !p)}
+        aria-label={playing ? "일시정지" : "재생"}
+        className="absolute inset-0 z-10 m-auto flex h-11 w-11 items-center justify-center rounded-full bg-[#161616]/65 text-[15px] text-white"
+      >
+        {playing ? "❚❚" : "▶"}
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={frames.length - 1}
+        value={idx}
+        onChange={(ev) => {
+          setPlaying(false);
+          setI(Number(ev.target.value));
+        }}
+        aria-label="타임랩스 위치"
+        className="absolute right-2 bottom-1.5 left-2 z-10 w-auto cursor-pointer accent-white"
+      />
+    </>
   );
 }
 
@@ -656,9 +783,13 @@ function TimelineView({ todos }: { todos: TodoOption[] }) {
             <div className="min-w-0 flex-1 py-4 pb-7 lg:py-6">
               <div className="flex flex-col border border-[#16161614] lg:flex-row">
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-[repeating-linear-gradient(45deg,#f4f4f4,#f4f4f4_9px,#efefef_9px,#efefef_18px)] lg:w-[220px] lg:flex-none">
-                  {e.photoUrls[0] && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={e.photoUrls[0]} alt="캠스터디 캡처" className="absolute inset-0 h-full w-full object-cover" />
+                  {e.photoUrls.length > 1 ? (
+                    <Timelapse frames={e.photoUrls} />
+                  ) : (
+                    e.photoUrls[0] && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={e.photoUrls[0]} alt="캠스터디 캡처" className="absolute inset-0 h-full w-full object-cover" />
+                    )
                   )}
                   {e.hasMemo && e.memoUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -669,8 +800,8 @@ function TimelineView({ todos }: { todos: TodoOption[] }) {
                     <span className="text-[11px] font-semibold text-white">인증됨</span>
                   </div>
                   {e.photoUrls.length > 1 && (
-                    <span className="absolute right-2.5 bottom-2.5 rounded-[2px] bg-[#161616]/80 px-1.5 py-0.5 text-[11px] font-medium text-white">
-                      +{e.photoUrls.length - 1}
+                    <span className="absolute right-2.5 bottom-6 z-10 rounded-[2px] bg-[#161616]/80 px-1.5 py-0.5 text-[11px] font-medium text-white">
+                      🎞 {e.photoUrls.length}컷
                     </span>
                   )}
                   {e.hasMemo && (
@@ -690,7 +821,7 @@ function TimelineView({ todos }: { todos: TodoOption[] }) {
                   <p className="m-0 mb-auto text-[16px] leading-6 text-[#161616] lg:text-[18px] lg:leading-7">
                     {e.title || "학습 진행 중"}
                   </p>
-                  {e.photoUrls.length > 1 && (
+                  {e.photoUrls.length > 1 && e.photoUrls.length <= 8 && (
                     <div className="scrollbar-hide mb-3 flex gap-1.5 overflow-x-auto">
                       {e.photoUrls.map((url, i) => (
                         // eslint-disable-next-line @next/next/no-img-element
