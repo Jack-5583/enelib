@@ -1038,8 +1038,13 @@ function InclassDetailSheet({ item, onClose }: { item: QuestionItem; onClose: ()
             {answer && <p className="m-0 text-[14px] leading-6 whitespace-pre-wrap text-[#393939]">{answer}</p>}
             {answerImages.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
-                {answerImages.map((url, i) => (
-                  <Zoomable key={i} src={url} className="h-32 w-32 rounded-[2px] border border-[#16161614] object-cover" />
+                {answerImages.map((_url, i) => (
+                  // Proxied same-origin so session/hotlink-protected files load.
+                  <Zoomable
+                    key={i}
+                    src={`/api/inclass/questions/${item.id}/file?i=${i}`}
+                    className="h-32 w-32 rounded-[2px] border border-[#16161614] object-cover"
+                  />
                 ))}
               </div>
             )}

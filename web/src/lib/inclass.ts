@@ -456,6 +456,15 @@ export async function inclassFetchAnswer(
   }
 }
 
+/** Fetch a board file (e.g. an answer's image attachment) through the lab's
+ * authenticated session, so private/hotlink-protected files still load. The
+ * caller streams the response back to the browser same-origin. */
+export async function inclassFetchFile(ctx: InclassCtx, fileUrl: string): Promise<Response> {
+  return fetch(fileUrl, {
+    headers: { "User-Agent": UA, Cookie: await authCookie(ctx), Referer: `${ctx.host}/`, Accept: "image/*,*/*" },
+  });
+}
+
 function htmlToText(html: string): string {
   return html
     .replace(/<\s*br\s*\/?>/gi, "\n")
