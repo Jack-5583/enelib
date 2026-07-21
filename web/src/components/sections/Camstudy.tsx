@@ -742,6 +742,20 @@ function TimelineView({ todos }: { todos: TodoOption[] }) {
     load();
   }
 
+  const [cleaning, setCleaning] = useState(false);
+  async function cleanupBlack() {
+    if (!window.confirm("검정(빈) 화면 기록을 전체 날짜에서 모두 삭제할까요?")) return;
+    setCleaning(true);
+    try {
+      const res = await fetch("/api/camstudy/timeline/cleanup", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      window.alert(typeof d.deleted === "number" ? `검정 기록 ${d.deleted}개를 삭제했어요.` : "정리에 실패했어요.");
+      load();
+    } finally {
+      setCleaning(false);
+    }
+  }
+
   const isToday = viewDate === todayIso();
   const totalLabel = entries.length ? `${entries.length}회` : "0회";
 
@@ -765,6 +779,13 @@ function TimelineView({ todos }: { todos: TodoOption[] }) {
       <div className="flex items-baseline justify-between border-b border-[#161616]/96 pt-2 pb-4 lg:pb-5">
         <p className="m-0 text-[18px] leading-7 font-semibold text-[#161616] lg:text-[20px] lg:leading-8">{isToday ? "오늘 학습 인증" : "학습 인증"}</p>
         <div className="flex items-center gap-3">
+          <button
+            onClick={cleanupBlack}
+            disabled={cleaning}
+            className="border-none bg-none p-0 text-[13px] text-[#161616]/45 underline underline-offset-[3px] disabled:opacity-50 lg:text-[14px]"
+          >
+            {cleaning ? "정리 중…" : "검정 기록 정리"}
+          </button>
           <button onClick={() => setUploadOpen(true)} className="border-none bg-none p-0 text-[14px] text-[#161616] underline underline-offset-[3px] lg:text-[16px]">
             + 사진으로 인증 추가
           </button>

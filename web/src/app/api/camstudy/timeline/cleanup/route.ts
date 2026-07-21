@@ -1,0 +1,36 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { getSessionUser } from "@/lib/session";
+
+// Solid-black JPEGs compress to a tiny fraction of a real photo's size, so an
+// entry whose every frame is under this many bytes is treated as a black/blank
+// capture. Real photos (even dark ones, even downscaled timelapse frames) are
+// comfortably larger, so legitimate records are left untouched.
+const BLACK_MAX_BYTES = 6000;
+
+function dataUrlBytes(url: string): number {
+  const comma = url.indexOf(",");
+  const b64 = comma >= 0 ? url.slice(comma + 1) : url;
+  return Math.floor((b64.length * 3) / 4);
+}
+
+// Delete the caller's all-black (blank) camstudy timeline entries, across all
+// dates. Returns how many were removed.
+export async function POST() {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+
+  const entries = await prisma.timelineEntry.findMany({
+    where: { ownerId: user.id },
+    select: { id: true, photoUrls: true },
+  });
+
+  const toDelete = entries
+    .filter((e) => e.photoUrls.length > 0 && e.photoUrls.every((u) => dataUrlBytes(u) < BLACK_MAX_BYTES))
+    .map((e) => e.id);
+
+  if (toDelete.length) {
+    await prisma.timelineEntry.deleteMany({ where: { id: { in: toDelete }, ownerId: user.id } });
+  }
+  return NextResponse.json({ deleted: toDelete.length });
+}
