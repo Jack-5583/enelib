@@ -404,9 +404,17 @@ export async function inclassFindArticleId(ctx: InclassCtx, title: string): Prom
 }
 
 // Attached files on inclass boards are served from this host (the site's own
-// downloadFileFromS3 uses it). The fileKey already includes the folder path.
+// downloadFileFromS3 uses it). Board-file keys live under FILE_FOLDER.
 const FILE_HOST = "https://file.inclass.co.kr/";
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|heic|heif|svg)$/i;
+
+/** Build a full file URL from a stored key (bare uuid or `board/qna/uuid`). */
+function inclassFileUrl(rawKey: string): string {
+  const key = rawKey.trim().replace(/^\/+/, "");
+  if (/^https?:\/\//i.test(key)) return key;
+  const bare = key.replace(new RegExp(`^${FILE_FOLDER}/`), "");
+  return `${FILE_HOST}${FILE_FOLDER}/${bare}`;
+}
 
 /** Scrape the teacher's reply (text + any attached image URLs) from a
  * question's view page, if one exists. */
@@ -434,18 +442,34 @@ export async function inclassFetchAnswer(
       /ck-content\b[^>]*>([\s\S]*?)<\/div>/i.exec(scope);
     const text = m ? htmlToText(m[1]) : "";
 
-    // Reply attachments live in `re-attachment-placeholder`; each file pairs a
-    // filename (in the <a>) with a hidden `fileKey` input. Keep only images.
+    // Reply attachment keys. The `re-attachment-placeholder` <li>/filename is
+    // rendered client-side by JS, so it's absent from the server HTML — the
+    // keys live in a `reAttachments.push('<key>')` script instead. Parse that
+    // (primary); fall back to server-rendered fileKey inputs if ever present.
     const images: string[] = [];
-    const attStart = scope.search(/re-attachment-placeholder/i);
-    if (attStart >= 0) {
-      const attScope = scope.slice(attStart);
-      const fileRe = /<a\b[^>]*>\s*(?:<i[^>]*>[\s\S]*?<\/i>)?\s*([^<]+?)\s*<\/a>[\s\S]*?class=["']fileKey["'][^>]*value=["']([^"']+)["']/gi;
-      let fm: RegExpExecArray | null;
-      while ((fm = fileRe.exec(attScope))) {
-        const name = fm[1].trim();
-        const key = fm[2].trim();
-        if (key && IMAGE_EXT.test(name)) images.push(FILE_HOST + key.replace(/^\/+/, ""));
+    const seen = new Set<string>();
+    const add = (rawKey: string) => {
+      const url = inclassFileUrl(rawKey);
+      if (url && !seen.has(url)) {
+        seen.add(url);
+        images.push(url);
+      }
+    };
+
+    // Only the reply's array — the question's is a separate `attachments.push`.
+    const scriptRe = /reAttachments\.push\(\s*[`'"]([^`'"]+)[`'"]\s*\)/gi;
+    let sm: RegExpExecArray | null;
+    while ((sm = scriptRe.exec(html))) add(sm[1]);
+
+    if (images.length === 0) {
+      const attStart = scope.search(/re-attachment-placeholder/i);
+      if (attStart >= 0) {
+        const attScope = scope.slice(attStart);
+        const fileRe = /<a\b[^>]*>\s*(?:<i[^>]*>[\s\S]*?<\/i>)?\s*([^<]+?)\s*<\/a>[\s\S]*?class=["']fileKey["'][^>]*value=["']([^"']+)["']/gi;
+        let fm: RegExpExecArray | null;
+        while ((fm = fileRe.exec(attScope))) {
+          if (fm[2].trim() && IMAGE_EXT.test(fm[1].trim())) add(fm[2]);
+        }
       }
     }
 
