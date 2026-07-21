@@ -22,15 +22,28 @@ export async function POST() {
 
   const entries = await prisma.timelineEntry.findMany({
     where: { ownerId: user.id },
-    select: { id: true, photoUrls: true },
+    select: { id: true, photoUrls: true, camSessionId: true },
   });
 
-  const toDelete = entries
-    .filter((e) => e.photoUrls.length > 0 && e.photoUrls.every((u) => dataUrlBytes(u) < BLACK_MAX_BYTES))
-    .map((e) => e.id);
+  const black = entries.filter(
+    (e) => e.photoUrls.length > 0 && e.photoUrls.every((u) => dataUrlBytes(u) < BLACK_MAX_BYTES)
+  );
+  const toDelete = black.map((e) => e.id);
+  const affectedSessions = [...new Set(black.map((e) => e.camSessionId).filter((x): x is string => !!x))];
 
   if (toDelete.length) {
     await prisma.timelineEntry.deleteMany({ where: { id: { in: toDelete }, ownerId: user.id } });
   }
-  return NextResponse.json({ deleted: toDelete.length });
+
+  // Drop sessions whose entries were all black (now empty) so the day's study
+  // time / session count no longer include them.
+  let removedSessions = 0;
+  for (const sid of affectedSessions) {
+    const remaining = await prisma.timelineEntry.count({ where: { camSessionId: sid } });
+    if (remaining === 0) {
+      const r = await prisma.camSession.deleteMany({ where: { id: sid, ownerId: user.id } });
+      removedSessions += r.count;
+    }
+  }
+  return NextResponse.json({ deleted: toDelete.length, removedSessions });
 }

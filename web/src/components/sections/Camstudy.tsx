@@ -12,8 +12,11 @@ const CAPTURE_SECONDS = [10, 20, 30, 60];
 const FLUSH_EVERY = 6;
 // Cap frames per session so one row's stored data URLs stay bounded (~600×~10KB).
 const MAX_FRAMES = 600;
-// Mean luminance (0–255) below which a frame is treated as black and skipped.
-const BLACK_THRESHOLD = 12;
+// Mean luminance (0–255) below which a frame is treated as black/too-dark and
+// skipped; also require a little variance so a uniformly blank (covered lens)
+// frame is rejected too.
+const BLACK_THRESHOLD = 22;
+const MIN_VARIANCE = 18;
 const PEN_COLORS = [
   { c: "#e0362f", label: "빨강" },
   { c: "#161616", label: "검정" },
@@ -97,6 +100,16 @@ export function Camstudy() {
       .then((r) => r.json())
       .then(setTodaySummary);
   }, []);
+
+  // Refresh today's study time / session count when returning to the live tab
+  // (e.g. after deleting records in the timeline tab).
+  useEffect(() => {
+    if (tab !== "live") return;
+    fetch("/api/camstudy/session")
+      .then((r) => r.json())
+      .then(setTodaySummary)
+      .catch(() => {});
+  }, [tab]);
 
   useEffect(
     () => () => {
@@ -395,16 +408,24 @@ export function Camstudy() {
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, w, h);
 
-    // Skip black frames (covered camera / not yet delivering video).
+    // Skip black / blank frames (covered camera, backgrounded, not yet
+    // delivering video): too dark, or too uniform to be a real scene.
     try {
       const data = ctx.getImageData(0, 0, w, h).data;
       let sum = 0;
+      let sumSq = 0;
       let n = 0;
       for (let i = 0; i < data.length; i += 4 * 40) {
-        sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        const l = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        sum += l;
+        sumSq += l * l;
         n++;
       }
-      if (n && sum / n < BLACK_THRESHOLD) return;
+      if (n) {
+        const mean = sum / n;
+        const variance = sumSq / n - mean * mean;
+        if (mean < BLACK_THRESHOLD || variance < MIN_VARIANCE) return;
+      }
     } catch {
       /* getUserMedia canvas isn't tainted; ignore */
     }
@@ -493,7 +514,7 @@ export function Camstudy() {
       setSeconds(secondsRef.current);
     }, 1000);
     // Grab an early frame (after camera warmup), then keep the timelapse rolling.
-    setTimeout(captureFrame, 1500);
+    setTimeout(captureFrame, 2500);
     captureRef.current = setInterval(captureFrame, captureSec * 1000);
   }
 

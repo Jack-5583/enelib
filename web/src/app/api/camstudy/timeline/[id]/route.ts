@@ -33,11 +33,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 // Delete a study-verification timeline entry (its handwriting memo cascades).
+// If this leaves its camstudy session with no entries, delete that session too
+// so the day's study time / session count reflect the removal.
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
+  const entry = await prisma.timelineEntry.findUnique({ where: { id }, select: { camSessionId: true, ownerId: true } });
   await prisma.timelineEntry.deleteMany({ where: { id, ownerId: user.id } });
+
+  if (entry?.ownerId === user.id && entry.camSessionId) {
+    const remaining = await prisma.timelineEntry.count({ where: { camSessionId: entry.camSessionId } });
+    if (remaining === 0) {
+      await prisma.camSession.deleteMany({ where: { id: entry.camSessionId, ownerId: user.id } });
+    }
+  }
   return NextResponse.json({ ok: true });
 }
