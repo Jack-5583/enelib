@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
+import { storeImageDataUrls } from "@/lib/blob";
 
 // Append timelapse frames to an existing session entry (and extend its span).
 const patchSchema = z.object({
@@ -21,10 +22,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
 
+  let appended: string[] = [];
+  if (parsed.data.appendPhotoUrls?.length) {
+    try {
+      appended = await storeImageDataUrls(user.id, parsed.data.appendPhotoUrls);
+    } catch {
+      return NextResponse.json({ error: "사진 저장에 실패했습니다. (저장소 설정 확인)" }, { status: 502 });
+    }
+  }
+
   await prisma.timelineEntry.update({
     where: { id },
     data: {
-      ...(parsed.data.appendPhotoUrls?.length ? { photoUrls: { push: parsed.data.appendPhotoUrls } } : {}),
+      ...(appended.length ? { photoUrls: { push: appended } } : {}),
       ...(parsed.data.endedAt ? { endedAt: new Date(parsed.data.endedAt) } : {}),
       ...(parsed.data.durationLabel ? { durationLabel: parsed.data.durationLabel } : {}),
     },

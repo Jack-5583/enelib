@@ -35,14 +35,20 @@ export function AppShell({ user, children }: { user: SessionUserDTO; children: R
   useEffect(() => {
     if (isParent) return;
     function checkUnseen() {
+      if (typeof document !== "undefined" && document.hidden) return;
       fetch("/api/questions/unseen-count")
         .then((r) => r.json())
         .then((d) => setHasUnseenQuestionReply((d.count ?? 0) > 0))
         .catch(() => {});
     }
     checkUnseen();
-    const interval = setInterval(checkUnseen, 60_000);
-    return () => clearInterval(interval);
+    // Poll infrequently and only while visible; refetch on return to the tab.
+    const interval = setInterval(checkUnseen, 300_000);
+    document.addEventListener("visibilitychange", checkUnseen);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", checkUnseen);
+    };
   }, [isParent]);
 
   return (

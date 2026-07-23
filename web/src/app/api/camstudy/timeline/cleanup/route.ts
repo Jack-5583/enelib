@@ -25,8 +25,11 @@ export async function POST() {
     select: { id: true, photoUrls: true, camSessionId: true },
   });
 
+  // Only old inline-base64 entries can be black here; frames stored in Blob are
+  // short URLs (and black frames are already skipped before upload), so an entry
+  // with any non-data URL is never flagged.
   const black = entries.filter(
-    (e) => e.photoUrls.length > 0 && e.photoUrls.every((u) => dataUrlBytes(u) < BLACK_MAX_BYTES)
+    (e) => e.photoUrls.length > 0 && e.photoUrls.every((u) => u.startsWith("data:") && dataUrlBytes(u) < BLACK_MAX_BYTES)
   );
   const toDelete = black.map((e) => e.id);
   const affectedSessions = [...new Set(black.map((e) => e.camSessionId).filter((x): x is string => !!x))];

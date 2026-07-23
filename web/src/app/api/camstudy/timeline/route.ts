@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
 import { kstMidnightInstant, addDaysToInstant, formatKstHm } from "@/lib/kst";
+import { storeImageDataUrls } from "@/lib/blob";
 
 export async function GET(req: Request) {
   const user = await getSessionUser();
@@ -73,6 +74,14 @@ export async function POST(req: Request) {
     durationLabel = formatDuration(endedAt.getTime() - capturedAt.getTime());
   }
 
+  let photoUrls: string[];
+  try {
+    // Store frames in Blob; only their small URLs land in the DB.
+    photoUrls = await storeImageDataUrls(user.id, parsed.data.photoUrls);
+  } catch {
+    return NextResponse.json({ error: "사진 저장에 실패했습니다. (저장소 설정 확인)" }, { status: 502 });
+  }
+
   const entry = await prisma.timelineEntry.create({
     data: {
       ownerId: user.id,
@@ -80,7 +89,7 @@ export async function POST(req: Request) {
       subject: parsed.data.subject || null,
       todoTitle: parsed.data.todoTitle || null,
       durationLabel,
-      photoUrls: parsed.data.photoUrls,
+      photoUrls,
       capturedAt,
       endedAt,
     },

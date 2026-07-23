@@ -231,8 +231,16 @@ export function Questions() {
   useEffect(() => {
     loadMe();
     loadQuestions();
-    const interval = setInterval(loadQuestions, 60_000);
-    return () => clearInterval(interval);
+    // Poll infrequently and only while visible; refetch on return to the tab.
+    const tick = () => {
+      if (typeof document === "undefined" || !document.hidden) loadQuestions();
+    };
+    const interval = setInterval(tick, 300_000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, []);
 
   async function toggleDone(q: QuestionItem) {
@@ -1199,8 +1207,9 @@ function QuestionDetailSheet({ id, onClose }: { id: string; onClose: () => void 
 
   useEffect(() => {
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
       if (detail?.postStatus === "posted") loadComments();
-    }, 60_000);
+    }, 180_000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, detail?.postStatus]);
